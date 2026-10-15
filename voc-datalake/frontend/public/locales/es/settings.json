@@ -175,5 +175,22 @@
     "configureFirst": "Configure el endpoint de API en la pestaña General para gestionar usuarios.",
     "description": "Gestione usuarios, roles y permisos para la plataforma VoC.",
     "title": "Administración de usuarios"
+  },
+  "customFilters": {
+    "title": "Filtros personalizados",
+    "intro": "Muestra hasta 3 campos de datos adicionales como filtros en la página de comentarios.",
+    "keyPlaceholder": "Clave del campo",
+    "labelPlaceholder": "Etiqueta visible",
+    "add": "Agregar filtro",
+    "remove": "Quitar",
+    "save": "Guardar filtros",
+    "saved": "Guardado",
+    "saveFailed": "No se pudieron guardar los filtros personalizados. Inténtalo de nuevo.",
+    "loadFailed": "No se pudieron cargar los filtros personalizados.",
+    "loading": "Cargando filtros personalizados...",
+    "capHint": "Hasta 3 filtros.",
+    "empty": "No hay filtros personalizados configurados.",
+    "suggestionsTitle": "Campos sugeridos",
+    "noSuggestions": "No hay sugerencias de campos a partir de datos recientes."
   }
 }

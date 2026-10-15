@@ -15,7 +15,13 @@ import { Search, Star, X } from 'lucide-react'
 import clsx from 'clsx'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
+import { CustomFilterSelects } from '../../components/CustomFilterSelects'
+import type { CustomFilterControl } from '../../components/CustomFilterSelects'
 import type { RatingDirection, RatingFilter } from './types'
+
+// Re-exported so existing importers (useCustomFilterControls) keep their path;
+// the type's home is now the shared component.
+export type { CustomFilterControl }
 
 interface FilterBarProps {
   readonly searchText: string
@@ -29,6 +35,15 @@ interface FilterBarProps {
   readonly onRatingFilterChange: (filter: RatingFilter) => void
   readonly hasActiveFilters: boolean
   readonly onClearFilters: () => void
+  /**
+   * Admin-configured custom-field filters to render as dropdowns. Empty when
+   * none are configured (the controls then don't render at all). `values` is
+   * the suggested value list for the key (from the candidates endpoint); it may
+   * be empty for a high-cardinality key, in which case the dropdown shows only
+   * the currently-selected value plus "all".
+   */
+  readonly customFilterControls?: readonly CustomFilterControl[]
+  readonly onCustomFilterChange?: (key: string, value: string) => void
   /** Optional content pinned to the far right of the bar (e.g. Export PDF). */
   readonly trailing?: React.ReactNode
 }
@@ -45,6 +60,8 @@ export function FilterBar({
   onRatingFilterChange,
   hasActiveFilters,
   onClearFilters,
+  customFilterControls,
+  onCustomFilterChange,
   trailing,
 }: FilterBarProps) {
   const { t } = useTranslation('categories')
@@ -73,6 +90,9 @@ export function FilterBar({
               <option key={source} value={source}>{source}</option>
             ))}
           </select>
+          {customFilterControls && onCustomFilterChange && (
+            <CustomFilterSelects controls={customFilterControls} onChange={onCustomFilterChange} />
+          )}
           <RatingPicker ratingFilter={ratingFilter} onRatingFilterChange={onRatingFilterChange} />
           <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
             <input

@@ -19,7 +19,8 @@ import {
 } from 'lucide-react'
 import { api, getDateRangeParams } from '../../api/client'
 import { useConfigStore } from '../../store/configStore'
-import type { FeedbackItem } from '../../api/client'
+import { CustomFilterSelects } from '../../components/CustomFilterSelects'
+import { useCustomFilterControls } from '../Categories/useCustomFilterControls'
 import { SubcategoryRow } from './SubcategoryRow'
 import { applyResolution } from './problemResolution'
 import { useProblemResolution } from './useProblemResolution'
@@ -30,163 +31,6 @@ import { generateProblemAnalysisPDF } from './problemAnalysisPdfGenerator'
 import { getTimeRangeLabel } from '../../utils/dateUtils'
 import { useTranslation } from 'react-i18next'
 
-
-// Normalize text for similarity comparison
-function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-// Extract key words from text
-function extractKeywords(text: string): Set<string> {
-  const stopWords = new Set(['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 
-    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
-    'must', 'shall', 'can', 'need', 'dare', 'ought', 'used', 'to', 'of', 'in', 'for', 'on', 'with',
-    'at', 'by', 'from', 'as', 'into', 'through', 'during', 'before', 'after', 'above', 'below',
-    'between', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where',
-    'why', 'how', 'all', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor',
-    'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just', 'and', 'but', 'if', 'or',
-    'because', 'until', 'while', 'although', 'though', 'after', 'before', 'when', 'whenever',
-    'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours',
-    'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself',
-    'it', 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which',
-    'who', 'whom', 'this', 'that', 'these', 'those', 'am', 'been', 'being', 'get', 'got', 'getting'])
-  
-  const words = normalizeText(text).split(' ')
-  return new Set(words.filter(w => w.length > 2 && !stopWords.has(w)))
-}
-
-// Calculate Jaccard similarity between two sets
-function jaccardSimilarity(set1: Set<string>, set2: Set<string>): number {
-  if (set1.size === 0 && set2.size === 0) return 1
-  if (set1.size === 0 || set2.size === 0) return 0
-  
-  const intersection = new Set([...set1].filter(x => set2.has(x)))
-  const union = new Set([...set1, ...set2])
-  
-  return intersection.size / union.size
-}
-
-// Check if keywords match any in a list above threshold
-function matchesAnyKeywords(newKeywords: Set<string>, texts: string[], threshold: number): boolean {
-  return texts.some(text => jaccardSimilarity(newKeywords, extractKeywords(text)) >= threshold)
-}
-
-// Find or create a similar problem group
-function findSimilarProblem(
-  problems: Map<string, ProblemGroup>,
-  newProblem: string,
-  threshold: number = 0.4
-): string | null {
-  const newKeywords = extractKeywords(newProblem)
-
-  for (const [existingProblem, group] of problems) {
-    const existingKeywords = extractKeywords(existingProblem)
-    if (jaccardSimilarity(newKeywords, existingKeywords) >= threshold) {
-      return existingProblem
-    }
-    if (matchesAnyKeywords(newKeywords, group.similarProblems, threshold)) {
-      return existingProblem
-    }
-  }
-
-  return null
-}
-
-function getOrCreateSubcategoryMap(
-  categoryMap: Map<string, Map<string, Map<string, ProblemGroup>>>,
-  category: string
-): Map<string, Map<string, ProblemGroup>> {
-  const existing = categoryMap.get(category)
-  if (existing) return existing
-  const newMap = new Map<string, Map<string, ProblemGroup>>()
-  categoryMap.set(category, newMap)
-  return newMap
-}
-
-function getOrCreateProblemMap(
-  subcategoryMap: Map<string, Map<string, ProblemGroup>>,
-  subcategory: string
-): Map<string, ProblemGroup> {
-  const existing = subcategoryMap.get(subcategory)
-  if (existing) return existing
-  const newMap = new Map<string, ProblemGroup>()
-  subcategoryMap.set(subcategory, newMap)
-  return newMap
-}
-
-function updateExistingGroup(group: ProblemGroup, item: FeedbackItem, problem: string, similarProblemKey: string): void {
-  group.items.push(item)
-  if (item.urgency === 'high') group.urgentCount++
-  if (problem !== similarProblemKey && !group.similarProblems.includes(problem)) {
-    group.similarProblems.push(problem)
-  }
-  if (!group.rootCause && item.problem_root_cause_hypothesis) {
-    group.rootCause = item.problem_root_cause_hypothesis
-  }
-}
-
-function addItemToProblemGroup(
-  problemMap: Map<string, ProblemGroup>,
-  item: FeedbackItem,
-  problem: string,
-  similarityThreshold: number
-): void {
-  const similarProblemKey = findSimilarProblem(problemMap, problem, similarityThreshold)
-
-  if (similarProblemKey) {
-    const group = problemMap.get(similarProblemKey)
-    if (group) {
-      updateExistingGroup(group, item, problem, similarProblemKey)
-    }
-  } else {
-    problemMap.set(problem, {
-      problem,
-      similarProblems: [],
-      rootCause: item.problem_root_cause_hypothesis || null,
-      items: [item],
-      avgSentiment: 0,
-      urgentCount: item.urgency === 'high' ? 1 : 0,
-    })
-  }
-}
-
-function buildSubcategoryGroup(problemMap: Map<string, ProblemGroup>, subcategory: string): SubcategoryGroup {
-  const problems: ProblemGroup[] = []
-
-  for (const group of problemMap.values()) {
-    group.avgSentiment = group.items.reduce((sum, i) => sum + i.sentiment_score, 0) / group.items.length
-    problems.push(group)
-  }
-
-  problems.sort((a, b) => b.items.length - a.items.length)
-  const totalItems = problems.reduce((sum, p) => sum + p.items.length, 0)
-  const urgentCount = problems.reduce((sum, p) => sum + p.urgentCount, 0)
-  return { subcategory, problems, totalItems, urgentCount }
-}
-
-function buildCategoryGroups(categoryMap: Map<string, Map<string, Map<string, ProblemGroup>>>): CategoryGroup[] {
-  const result: CategoryGroup[] = []
-
-  for (const [category, subcategoryMap] of categoryMap) {
-    const subcategories: SubcategoryGroup[] = []
-
-    for (const [subcategory, problemMap] of subcategoryMap) {
-      subcategories.push(buildSubcategoryGroup(problemMap, subcategory))
-    }
-
-    subcategories.sort((a, b) => b.totalItems - a.totalItems)
-    const categoryTotalItems = subcategories.reduce((sum, s) => sum + s.totalItems, 0)
-    const categoryUrgent = subcategories.reduce((sum, s) => sum + s.urgentCount, 0)
-    result.push({ category, subcategories, totalItems: categoryTotalItems, urgentCount: categoryUrgent })
-  }
-
-  result.sort((a, b) => b.totalItems - a.totalItems)
-  return result
-}
 
 // Map the in-memory grouping tree to the PDF export shape
 // (the problem level uses itemCount instead of the full items array).
@@ -203,7 +47,7 @@ function toPDFCategories(groups: CategoryGroup[]) {
         problem: p.problem,
         similarProblems: p.similarProblems,
         rootCause: p.rootCause,
-        itemCount: p.items.length,
+        itemCount: p.itemCount,
         avgSentiment: p.avgSentiment,
         urgentCount: p.urgentCount,
         // With "Show resolved" on, resolved groups reach the export — the
@@ -218,6 +62,43 @@ function toPDFCategories(groups: CategoryGroup[]) {
 // component's complexity budget.
 function anyFilterActive(...filters: Array<string | boolean | null>): boolean {
   return filters.some(Boolean)
+}
+
+/**
+ * Post-filter the server-built tree by category / subcategory / urgent-only,
+ * recomputing each level's totals so headers reflect what remains. Source is
+ * applied server-side (a query param), so it is not handled here. A category
+ * or subcategory left with no problems is dropped so empty branches don't show.
+ */
+function filterTree(
+  categories: CategoryGroup[],
+  filters: { category: string | null; subcategory: string | null; urgentOnly: boolean },
+): CategoryGroup[] {
+  const keepProblem = (p: ProblemGroup) => !filters.urgentOnly || p.urgentCount > 0
+  const rebuiltSub = (s: SubcategoryGroup): SubcategoryGroup => {
+    const problems = s.problems.filter(keepProblem)
+    return {
+      ...s,
+      problems,
+      totalItems: problems.reduce((sum, p) => sum + p.itemCount, 0),
+      urgentCount: problems.reduce((sum, p) => sum + p.urgentCount, 0),
+    }
+  }
+  return categories
+    .filter((c) => !filters.category || c.category === filters.category)
+    .map((c) => {
+      const subcategories = c.subcategories
+        .filter((s) => !filters.subcategory || s.subcategory === filters.subcategory)
+        .map(rebuiltSub)
+        .filter((s) => s.problems.length > 0)
+      return {
+        ...c,
+        subcategories,
+        totalItems: subcategories.reduce((sum, s) => sum + s.totalItems, 0),
+        urgentCount: subcategories.reduce((sum, s) => sum + s.urgentCount, 0),
+      }
+    })
+    .filter((c) => c.subcategories.length > 0)
 }
 
 // Empty state distinguishes "nothing in this window" from "everything here
@@ -272,6 +153,17 @@ export default function ProblemAnalysis() {
   const [showUrgentOnly, setShowUrgentOnly] = useState(false)
   const [showResolved, setShowResolved] = useState(false)
   const [similarityThreshold, setSimilarityThreshold] = useState(0.4)
+  // Admin-configured custom-field selections (key -> value). Row-level filters
+  // pushed down to the server before aggregation, same as source.
+  const [customFilters, setCustomFilters] = useState<Record<string, string>>({})
+
+  const setCustomFilter = (key: string, value: string) =>
+    setCustomFilters((prev) => {
+      const next = { ...prev }
+      if (value) next[key] = value
+      else delete next[key]
+      return next
+    })
 
   // Fetch entities for dynamic sources and categories
   const { data: entitiesData } = useQuery({
@@ -280,10 +172,19 @@ export default function ProblemAnalysis() {
     enabled: !!config.apiEndpoint,
   })
 
-  // Pages the whole window rather than asking for one oversized page: the
-  // stat cards and the tree are aggregates, and `/feedback` silently clamps
-  // `limit` to 100 (U5b). `isPartial` reports a window read only in part.
-  const feedback = useProblemFeedback(dateParams, config.apiEndpoint)
+  // Admin-configured custom-field filter dropdowns (same hook Categories uses):
+  // joins the saved filter config with the recommended values per key.
+  const customFilterControls = useCustomFilterControls(config.apiEndpoint, customFilters)
+
+  // The server aggregates the FULL window into finest-grain problem leaves;
+  // this hook merges them to `similarityThreshold` in-browser (the slider
+  // re-merges without re-fetching). `selectedSource` and the custom-field
+  // selections are pushed down as server query params — they're row-level
+  // filters, so applying them before aggregation is both correct and cheaper
+  // than filtering a built tree.
+  const feedback = useProblemFeedback(
+    dateParams, config.apiEndpoint, similarityThreshold, selectedSource, customFilters,
+  )
 
   // Resolved problems are shared across users (issue #66); resolving one
   // clears it from everyone's default view. All query/mutation wiring lives
@@ -300,36 +201,24 @@ export default function ProblemAnalysis() {
       .sort((a, b) => (entitiesData.entities.sources[b] || 0) - (entitiesData.entities.sources[a] || 0))
   }, [entitiesData])
 
-  // Group feedback by category → subcategory → problem (with similarity) → items
-  const groupedData = useMemo(() => {
-    const categoryMap = new Map<string, Map<string, Map<string, ProblemGroup>>>()
-
-    const filteredItems = feedback.items
-      .filter(item => item.problem_summary)
-      .filter(item => !showUrgentOnly || item.urgency === 'high')
-      .filter(item => !selectedCategory || item.category === selectedCategory)
-      .filter(item => !selectedSubcategory || item.subcategory === selectedSubcategory)
-      .filter(item => !selectedSource || item.source_platform === selectedSource)
-
-    for (const item of filteredItems) {
-      const category = item.category || 'uncategorized'
-      const subcategory = item.subcategory || 'general'
-      const problem = item.problem_summary || 'Unknown Issue'
-
-      const subcategoryMap = getOrCreateSubcategoryMap(categoryMap, category)
-      const problemMap = getOrCreateProblemMap(subcategoryMap, subcategory)
-      addItemToProblemGroup(problemMap, item, problem, similarityThreshold)
-    }
-
-    return buildCategoryGroups(categoryMap)
-  }, [feedback.items, showUrgentOnly, selectedCategory, selectedSubcategory, selectedSource, similarityThreshold])
+  // Category/subcategory/urgent are post-filters over the SERVER-BUILT tree
+  // (source already applied server-side). Recompute each level's totals so the
+  // headers reflect what the filter leaves visible.
+  const filteredTree = useMemo(
+    () => filterTree(feedback.categories, {
+      category: selectedCategory,
+      subcategory: selectedSubcategory,
+      urgentOnly: showUrgentOnly,
+    }),
+    [feedback.categories, selectedCategory, selectedSubcategory, showUrgentOnly],
+  )
 
   // Annotate problem groups with their shared resolved status and hide the
   // resolved ones unless requested; category/subcategory totals are
   // recomputed so headers reflect what is actually shown (issue #66).
   const { visible: visibleData, resolvedCount } = useMemo(
-    () => applyResolution(groupedData, resolvedMap, showResolved),
-    [groupedData, resolvedMap, showResolved],
+    () => applyResolution(filteredTree, resolvedMap, showResolved),
+    [filteredTree, resolvedMap, showResolved],
   )
 
   // Get unique categories from entities (dynamic)
@@ -340,14 +229,22 @@ export default function ProblemAnalysis() {
       .sort((a, b) => (categories[b] ?? 0) - (categories[a] ?? 0))
   }, [entitiesData])
 
-  // Get unique subcategories from current data
+  // Window + source + custom filters handed to each expanded problem for its
+  // on-demand row fetch, so examples match the same filter as the tree.
+  // Memoized so a problem row isn't re-rendered on unrelated state.
+  const drillParams = useMemo(
+    () => ({ dateParams, source: selectedSource, customFilters }),
+    [dateParams, selectedSource, customFilters],
+  )
+
+  // Subcategories present in the aggregated tree (for the filter dropdown).
   const allSubcategories = useMemo(() => {
     const subcats = new Set<string>()
-    for (const item of feedback.items) {
-      if (item.subcategory) subcats.add(item.subcategory)
+    for (const c of feedback.categories) {
+      for (const s of c.subcategories) subcats.add(s.subcategory)
     }
     return Array.from(subcats).sort((a, b) => a.localeCompare(b))
-  }, [feedback.items])
+  }, [feedback.categories])
 
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => {
@@ -444,11 +341,10 @@ export default function ProblemAnalysis() {
 
   // Nothing was read, so every aggregate below would be a zero that looks like
   // a finding. Say the window is unknown instead of implying it is empty.
-  if (feedback.isError && feedback.items.length === 0) {
+  if (feedback.isError && feedback.loadedCount === 0) {
     return (
       <div className="flex items-center justify-center h-full">
         <WindowCoverageNotice
-          isLoadingMore={false}
           isPartial={false}
           hasFailed
           loadedCount={0}
@@ -503,7 +399,6 @@ export default function ProblemAnalysis() {
       {/* Coverage of the counts above; self-hiding when the window was read in
           full. Rationale lives in the component. */}
       <WindowCoverageNotice
-        isLoadingMore={feedback.isLoadingMore}
         isPartial={feedback.isPartial}
         hasFailed={feedback.isError}
         loadedCount={feedback.loadedCount}
@@ -546,6 +441,8 @@ export default function ProblemAnalysis() {
                 <option key={sub} value={sub}>{sub.replace('_', ' ')}</option>
               ))}
             </select>
+            {/* Admin-configured custom-field filters (empty = none configured). */}
+            <CustomFilterSelects controls={customFilterControls} onChange={setCustomFilter} />
           </div>
           
           {/* Controls Row */}
@@ -571,9 +468,9 @@ export default function ProblemAnalysis() {
                     (what the toggle would reveal), not the global store. */}
                 <span>{t('problemResolution.showResolved', { total: resolvedCount })}</span>
               </label>
-              {anyFilterActive(selectedSource, selectedCategory, selectedSubcategory, showUrgentOnly, showResolved) && (
+              {anyFilterActive(selectedSource, selectedCategory, selectedSubcategory, showUrgentOnly, showResolved, Object.keys(customFilters).length > 0) && (
                 <button
-                  onClick={() => { setSelectedSource(null); setSelectedCategory(null); setSelectedSubcategory(null); setShowUrgentOnly(false); setShowResolved(false) }}
+                  onClick={() => { setSelectedSource(null); setSelectedCategory(null); setSelectedSubcategory(null); setShowUrgentOnly(false); setShowResolved(false); setCustomFilters({}) }}
                   className="text-xs sm:text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 active:scale-95"
                 >
                   <X size={12} className="sm:w-[14px] sm:h-[14px]" />
@@ -670,6 +567,7 @@ export default function ProblemAnalysis() {
                         onToggleProblem={toggleProblem}
                         onToggleResolved={toggleResolved}
                         pendingKeys={pendingKeys}
+                        drillParams={drillParams}
                       />
                     )
                   })}

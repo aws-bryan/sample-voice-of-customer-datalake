@@ -78,10 +78,13 @@
     "settings": "設定"
   },
   "partialCountsHint": "概算値: 期間全体を読み取れなかったため、件数は下限値です",
+  "emptyWindowFallback": "選択した期間にフィードバックがありません。代わりに最新のデータを表示しています（{{date}} 時点）。",
   "partialWindowHint": "すべて表示するにはフィルターを絞り込んでください",
   "problemAnalysisPage": {
     "emptyHint": "期間を広げるかフィルターを調整してください",
-    "emptyTitle": "選択した期間の問題分析データが見つかりません"
+    "emptyTitle": "選択した期間の問題分析データが見つかりません",
+    "itemsLoadFailed": "例を読み込めませんでした。",
+    "noExamples": "例となるフィードバックが見つかりません。"
   },
   "problemResolution": {
     "allResolvedHint": "上の「解決済みを表示 ({{total}})」を有効にすると確認できます",
@@ -124,5 +127,9 @@
     "endDate": "終了日",
     "selectDateRange": "期間を選択",
     "startDate": "開始日"
+  },
+  "customFilter": {
+    "filterBy": "{{label}}で絞り込む",
+    "allOf": "すべての{{label}}"
   }
 }

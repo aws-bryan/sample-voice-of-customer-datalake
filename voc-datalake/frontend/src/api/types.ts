@@ -152,6 +152,22 @@ export interface CategoryBreakdown {
   categories: Record<string, number>
 }
 
+/**
+ * Response envelope for `/metrics/latest-date`.
+ *
+ * Powers the empty-window fallback: when the user's selected time range returns
+ * no data, the page asks for the newest date that DOES have feedback and
+ * re-queries at a window ending there. `latest_date` is `null` when the
+ * deployment has no feedback at all (nothing to fall back to). `date_basis`
+ * echoes the basis the date was computed under, so the caller re-queries on the
+ * same basis it filters on.
+ */
+export interface LatestDateResponse {
+  /** Newest populated date as 'YYYY-MM-DD', or null when no feedback exists. */
+  latest_date: string | null
+  date_basis: DateBasis
+}
+
 export interface SourceBreakdown {
   period_days: number
   /** See {@link MetricsSummary.is_partial} — same flag, same three reasons. */

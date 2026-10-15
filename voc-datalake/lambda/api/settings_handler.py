@@ -32,6 +32,20 @@ SETTINGS_PK = "SETTINGS#brand"
 SETTINGS_SK = "config"
 CATEGORIES_PK = "SETTINGS#categories"
 CATEGORIES_SK = "config"
+CUSTOM_FILTERS_PK = "SETTINGS#custom_filters"
+CUSTOM_FILTERS_SK = "config"
+
+# Admins may expose at most this many custom-field filters on the feedback UI.
+# A hard cap (not just UI advice) because each one is an in-memory post-filter
+# over the candidate window on three read endpoints — the ceiling bounds that
+# cost and keeps the filter bar legible.
+MAX_CUSTOM_FILTERS = 3
+# A custom-filter key is a custom_fields map key; mirror the processor's
+# MAX_CUSTOM_FIELD_KEY_LENGTH (64) so a configured key can actually match a
+# stored one. Restated rather than imported — the settings bundle does not
+# include the processor module.
+MAX_CUSTOM_FILTER_KEY_LENGTH = 64
+MAX_CUSTOM_FILTER_LABEL_LENGTH = 64
 RESOLVED_PROBLEMS_PK = "SETTINGS#resolved_problems"
 RESOLVED_PROBLEMS_SK = "config"
 
@@ -509,6 +523,96 @@ def save_categories_config():
     except Exception as e:
         logger.exception(f"Failed to save categories config: {e}")
         raise ServiceError('Failed to save categories')
+
+
+@app.get("/settings/custom-filters")
+@tracer.capture_method
+def get_custom_filters():
+    """Get the admin-chosen custom-field filters exposed on the feedback UI.
+
+    Shape: ``{'custom_filters': [{'key': str, 'label': str}, ...]}`` — up to
+    MAX_CUSTOM_FILTERS entries. Readable by any authenticated user: the filter
+    UI is for everyone; only CHOOSING the filters is admin-gated (the PUT).
+    """
+    if not aggregates_table:
+        return {'custom_filters': []}
+    try:
+        response = aggregates_table.get_item(Key={'pk': CUSTOM_FILTERS_PK, 'sk': CUSTOM_FILTERS_SK})
+        item = response.get('Item')
+        if not item:
+            return {'custom_filters': [], 'updated_at': None}
+        return {
+            'custom_filters': item.get('custom_filters', []),
+            'updated_at': item.get('updated_at'),
+        }
+    except Exception as e:
+        logger.exception(f"Failed to get custom filters: {e}")
+        return {'custom_filters': [], 'error': 'Failed to retrieve custom filters'}
+
+
+def _validate_custom_filters(raw) -> list[dict]:
+    """Validate and normalize a custom-filters payload into stored shape.
+
+    Accepts a list of entries, each an object with a non-empty ``key`` (a
+    custom_fields map key) and an optional ``label``. Enforces the count cap,
+    bounds the key/label lengths, trims, drops blanks, and de-duplicates by key
+    (first wins). Raises ValidationError on a malformed payload so a bad admin
+    request is a 400, not a silently-stored broken config.
+    """
+    if not isinstance(raw, list):
+        raise ValidationError('custom_filters must be a list')
+    if len(raw) > MAX_CUSTOM_FILTERS:
+        raise ValidationError(f'At most {MAX_CUSTOM_FILTERS} custom filters are allowed')
+
+    cleaned: list[dict] = []
+    seen_keys: set[str] = set()
+    for idx, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ValidationError(f'custom_filters[{idx}] must be an object')
+        key = entry.get('key')
+        if not isinstance(key, str) or not key.strip():
+            raise ValidationError(f'custom_filters[{idx}].key is required')
+        key = key.strip()
+        if len(key) > MAX_CUSTOM_FILTER_KEY_LENGTH:
+            raise ValidationError(
+                f'custom_filters[{idx}].key exceeds {MAX_CUSTOM_FILTER_KEY_LENGTH} characters'
+            )
+        if key in seen_keys:
+            continue  # Duplicate key — first occurrence wins.
+        seen_keys.add(key)
+        # Label is a display name; default to the key when absent.
+        label = entry.get('label')
+        label = label.strip() if isinstance(label, str) and label.strip() else key
+        cleaned.append({'key': key, 'label': label[:MAX_CUSTOM_FILTER_LABEL_LENGTH]})
+    return cleaned
+
+
+@app.put("/settings/custom-filters")
+@tracer.capture_method
+def save_custom_filters():
+    """Save the custom-field filters exposed on the feedback UI.
+
+    Admin-only: this is an org-wide configuration (every user sees the same
+    filters), so it is gated on the ``admins`` Cognito group server-side,
+    matching the model-picker handler — not the un-gated brand/categories ones.
+    """
+    if not aggregates_table:
+        raise ConfigurationError('Aggregates table not configured')
+    require_admin(app.current_event.raw_event)
+    body = app.current_event.json_body or {}
+    custom_filters = _validate_custom_filters(body.get('custom_filters', []))
+    try:
+        item = {
+            'pk': CUSTOM_FILTERS_PK,
+            'sk': CUSTOM_FILTERS_SK,
+            'custom_filters': custom_filters,
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }
+        aggregates_table.put_item(Item=item)
+        return {'success': True, 'custom_filters': custom_filters}
+    except Exception as e:
+        logger.exception(f"Failed to save custom filters: {e}")
+        raise ServiceError('Failed to save custom filters')
 
 
 @app.post("/settings/categories/generate")

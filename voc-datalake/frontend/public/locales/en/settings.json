@@ -164,5 +164,22 @@
     "configureFirst": "Configure the API endpoint in the General tab to manage users.",
     "description": "Manage users, roles, and permissions for the VoC platform.",
     "title": "User Administration"
+  },
+  "customFilters": {
+    "title": "Custom Filters",
+    "intro": "Expose up to 3 extra data fields as filters on the feedback page.",
+    "keyPlaceholder": "Field key",
+    "labelPlaceholder": "Display label",
+    "add": "Add filter",
+    "remove": "Remove",
+    "save": "Save filters",
+    "saved": "Saved",
+    "saveFailed": "Failed to save custom filters. Try again.",
+    "loadFailed": "Could not load custom filters.",
+    "loading": "Loading custom filters...",
+    "capHint": "Up to 3 filters.",
+    "empty": "No custom filters configured.",
+    "suggestionsTitle": "Suggested fields",
+    "noSuggestions": "No field suggestions from recent data."
   }
 }

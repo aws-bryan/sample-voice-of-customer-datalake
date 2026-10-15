@@ -81,10 +81,13 @@
     "settings": "Configuración"
   },
   "partialCountsHint": "Aproximado: no se pudo leer el periodo completo, los recuentos son un límite inferior",
+  "emptyWindowFallback": "No hay comentarios en el periodo seleccionado. Mostrando tus datos más recientes (desde {{date}}).",
   "partialWindowHint": "acota los filtros para verlos todos",
   "problemAnalysisPage": {
     "emptyHint": "Prueba a ampliar el rango de tiempo o ajustar los filtros",
-    "emptyTitle": "No se encontraron datos de análisis de problemas para el período seleccionado"
+    "emptyTitle": "No se encontraron datos de análisis de problemas para el período seleccionado",
+    "itemsLoadFailed": "No se pudieron cargar los ejemplos.",
+    "noExamples": "No se encontraron comentarios de ejemplo."
   },
   "problemResolution": {
     "allResolvedHint": "Activa \"Mostrar resueltos ({{total}})\" arriba para revisarlos",
@@ -128,5 +131,9 @@
     "endDate": "Fecha fin",
     "selectDateRange": "Seleccionar rango de fechas",
     "startDate": "Fecha inicio"
+  },
+  "customFilter": {
+    "filterBy": "Filtrar por {{label}}",
+    "allOf": "Todos: {{label}}"
   }
 }

@@ -164,5 +164,22 @@
     "configureFirst": "사용자를 관리하려면 일반 탭에서 API 엔드포인트를 구성하세요.",
     "description": "VoC 플랫폼의 사용자, 역할 및 권한을 관리합니다.",
     "title": "사용자 관리"
+  },
+  "customFilters": {
+    "title": "사용자 지정 필터",
+    "intro": "피드백 페이지에 최대 3개의 추가 데이터 필드를 필터로 표시합니다.",
+    "keyPlaceholder": "필드 키",
+    "labelPlaceholder": "표시 레이블",
+    "add": "필터 추가",
+    "remove": "제거",
+    "save": "필터 저장",
+    "saved": "저장됨",
+    "saveFailed": "사용자 지정 필터를 저장하지 못했습니다. 다시 시도하세요.",
+    "loadFailed": "사용자 지정 필터를 불러오지 못했습니다.",
+    "loading": "사용자 지정 필터를 불러오는 중...",
+    "capHint": "최대 3개의 필터.",
+    "empty": "구성된 사용자 지정 필터가 없습니다.",
+    "suggestionsTitle": "추천 필드",
+    "noSuggestions": "최근 데이터에서 추천할 필드가 없습니다."
   }
 }

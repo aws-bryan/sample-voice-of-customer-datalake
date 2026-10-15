@@ -78,10 +78,13 @@
     "settings": "设置"
   },
   "partialCountsHint": "近似值：无法读取完整时间范围，计数为下限",
+  "emptyWindowFallback": "所选时间范围内没有反馈。改为显示您的最新数据（自 {{date}}）。",
   "partialWindowHint": "缩小筛选范围以查看全部",
   "problemAnalysisPage": {
     "emptyHint": "请尝试扩大时间范围或调整筛选条件",
-    "emptyTitle": "未找到所选时间段的问题分析数据"
+    "emptyTitle": "未找到所选时间段的问题分析数据",
+    "itemsLoadFailed": "无法加载示例。",
+    "noExamples": "未找到示例反馈。"
   },
   "problemResolution": {
     "allResolvedHint": "启用上方的\"显示已解决 ({{total}})\"即可查看",
@@ -124,5 +127,9 @@
     "endDate": "结束日期",
     "selectDateRange": "选择日期范围",
     "startDate": "开始日期"
+  },
+  "customFilter": {
+    "filterBy": "按{{label}}筛选",
+    "allOf": "全部{{label}}"
   }
 }

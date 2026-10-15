@@ -26,6 +26,7 @@ import ConfirmModal from '../../components/ConfirmModal'
 import SourceCard from './SourceCard'
 import LogsSection from './LogsSection'
 import AiModelSection from './AiModelSection'
+import CustomFiltersSection from './CustomFiltersSection'
 import { useApiEndpointField, useBrandForm } from './useSettingsSync'
 import { getEnabledPlugins } from '../../plugins'
 
@@ -183,6 +184,7 @@ export default function Settings() {
               onUrlsToTrackChange={setUrlsToTrack}
             />
             <AiModelSection apiEndpoint={apiEndpoint} isAdmin={isAdmin} />
+            <CustomFiltersSection apiEndpoint={apiEndpoint} isAdmin={isAdmin} />
             <DangerZoneSection
               showResetConfirm={showResetConfirm}
               onShowResetConfirm={setShowResetConfirm}

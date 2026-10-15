@@ -78,10 +78,13 @@
     "settings": "Einstellungen"
   },
   "partialCountsHint": "Näherungswert: Der gesamte Zeitraum konnte nicht gelesen werden, die Zahlen sind eine Untergrenze",
+  "emptyWindowFallback": "Keine Rückmeldungen im ausgewählten Zeitraum. Stattdessen werden Ihre neuesten Daten angezeigt (von {{date}}).",
   "partialWindowHint": "Filter eingrenzen, um alle zu sehen",
   "problemAnalysisPage": {
     "emptyHint": "Erweitere den Zeitraum oder passe die Filter an",
-    "emptyTitle": "Keine Problemanalyse-Daten für den ausgewählten Zeitraum gefunden"
+    "emptyTitle": "Keine Problemanalyse-Daten für den ausgewählten Zeitraum gefunden",
+    "itemsLoadFailed": "Beispiele konnten nicht geladen werden.",
+    "noExamples": "Kein Beispiel-Feedback gefunden."
   },
   "problemResolution": {
     "allResolvedHint": "Aktiviere oben „Gelöste anzeigen ({{total}})\", um sie zu prüfen",
@@ -124,5 +127,9 @@
     "endDate": "Enddatum",
     "selectDateRange": "Zeitraum auswählen",
     "startDate": "Startdatum"
+  },
+  "customFilter": {
+    "filterBy": "Nach {{label}} filtern",
+    "allOf": "Alle {{label}}"
   }
 }

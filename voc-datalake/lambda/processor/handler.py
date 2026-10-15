@@ -267,6 +267,59 @@ def decimal_default(obj):
     raise TypeError
 
 
+# Bounds for the custom-fields map persisted on a feedback record. Mirror the
+# wire schema's MessageMetadata limits (plugins/_shared/schemas.py:
+# MAX_METADATA_KEYS=20, MAX_METADATA_VALUE_LENGTH=1000) rather than importing
+# them — the processor bundle does not include the plugin schema package. Keep
+# the two in step; the Pydantic layer already enforces these upstream, so this
+# is a defense-in-depth re-bound at the storage boundary, not the only guard.
+MAX_CUSTOM_FIELD_KEYS = 20
+MAX_CUSTOM_FIELD_VALUE_LENGTH = 1000
+MAX_CUSTOM_FIELD_KEY_LENGTH = 64
+
+
+def _build_custom_fields(metadata) -> dict | None:
+    """Sanitize import metadata into a DynamoDB-safe custom-fields map.
+
+    The import pipeline carries arbitrary extra columns through
+    `IngestMessage.metadata` (flat primitives, enforced by MessageMetadata), but
+    the processor historically dropped it — so extra fields never reached the
+    stored record and could not be filtered on. This persists them under a
+    single nested `custom_fields` attribute, isolated from the top-level item so
+    an import field can never collide with or overwrite a reserved/enrichment
+    attribute (category, urgency, GSI keys, …).
+
+    Returns None (not an empty dict) when there is nothing to store, so the
+    item-build's None-stripping comprehension omits the attribute entirely for
+    records that carry no extra fields.
+
+    Only primitive values survive: strings (bounded), ints/bools, and floats
+    converted to Decimal (DynamoDB rejects floats). Non-primitive values and
+    over-long keys are skipped rather than failing the whole record — a single
+    malformed extra field must not cost us an otherwise-valid piece of feedback.
+    """
+    if not isinstance(metadata, dict) or not metadata:
+        return None
+
+    cleaned: dict = {}
+    for key, value in metadata.items():
+        if len(cleaned) >= MAX_CUSTOM_FIELD_KEYS:
+            break
+        if not isinstance(key, str) or not key or len(key) > MAX_CUSTOM_FIELD_KEY_LENGTH:
+            continue
+        if value is None or isinstance(value, bool):
+            cleaned[key] = value
+        elif isinstance(value, int):
+            cleaned[key] = value
+        elif isinstance(value, float):
+            cleaned[key] = Decimal(str(round(value, 6)))
+        elif isinstance(value, str):
+            cleaned[key] = value[:MAX_CUSTOM_FIELD_VALUE_LENGTH]
+        # Anything else (nested dict/list) is skipped — see docstring.
+
+    return cleaned or None
+
+
 @tracer.capture_method
 def detect_language(text: str) -> str:
     """Detect dominant language using Comprehend."""
@@ -566,7 +619,13 @@ def process_feedback(raw_record: dict, idempotency_key: str = None) -> dict:
         'persona_attributes': persona.get('attributes'),
         
         'llm_metadata': llm_result.get('metadata', {}),
-        
+
+        # Extra/custom fields carried from the import (e.g. region, product line,
+        # plan tier). Isolated in a nested map so they can never collide with a
+        # top-level enrichment attribute; None when the record carried none, so
+        # the None-stripping below omits the attribute entirely.
+        'custom_fields': _build_custom_fields(raw_record.get('metadata')),
+
         # TTL: 1 year
         'ttl': int((now.timestamp()) + 365 * 24 * 60 * 60)
     }

@@ -647,12 +647,13 @@ export const api = {
     return fetchApi<{ files: S3ImportFile[]; bucket: string | null }>(`/s3-import/files?${searchParams}`)
   },
   
-  getS3UploadUrl: (filename: string, source: string, contentType?: string) =>
-    fetchApi<{ success: boolean; upload_url?: string; key?: string; error?: string }>('/s3-import/upload-url', {
+  // `source_field` (Phase 5) is signed into the URL as object metadata, so the
+  // browser PUT must echo it as x-amz-meta-source-field.
+  getS3UploadUrl: (filename: string, source: string, contentType?: string, sourceField?: string) =>
+    fetchApi<{ success: boolean; upload_url?: string; key?: string; error?: string; source_field?: string | null }>('/s3-import/upload-url', {
       method: 'POST',
-      body: JSON.stringify({ filename, source, content_type: contentType || 'application/octet-stream' })
+      body: JSON.stringify({ filename, source, content_type: contentType || 'application/octet-stream', ...(sourceField ? { source_field: sourceField } : {}) })
     }),
-  
   deleteS3ImportFile: (key: string) =>
     fetchApi<{ success: boolean; message?: string }>(`/s3-import/file/${encodeURIComponent(key)}`, {
       method: 'DELETE'

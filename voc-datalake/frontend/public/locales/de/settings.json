@@ -164,5 +164,22 @@
     "configureFirst": "Konfigurieren Sie den API-Endpunkt im Tab Allgemein, um Benutzer zu verwalten.",
     "description": "Benutzer, Rollen und Berechtigungen für die VoC-Plattform verwalten.",
     "title": "Benutzerverwaltung"
+  },
+  "customFilters": {
+    "title": "Benutzerdefinierte Filter",
+    "intro": "Blenden Sie bis zu 3 zusätzliche Datenfelder als Filter auf der Feedbackseite ein.",
+    "keyPlaceholder": "Feldschlüssel",
+    "labelPlaceholder": "Anzeigename",
+    "add": "Filter hinzufügen",
+    "remove": "Entfernen",
+    "save": "Filter speichern",
+    "saved": "Gespeichert",
+    "saveFailed": "Benutzerdefinierte Filter konnten nicht gespeichert werden. Erneut versuchen.",
+    "loadFailed": "Benutzerdefinierte Filter konnten nicht geladen werden.",
+    "loading": "Benutzerdefinierte Filter werden geladen...",
+    "capHint": "Bis zu 3 Filter.",
+    "empty": "Keine benutzerdefinierten Filter konfiguriert.",
+    "suggestionsTitle": "Vorgeschlagene Felder",
+    "noSuggestions": "Keine Feldvorschläge aus aktuellen Daten."
   }
 }

@@ -1662,7 +1662,13 @@ export class VocApiStack extends VocStack {
     feedbackResource.addResource('urgent').addMethod('GET', metricsIntegration, authMethodOptions);
     feedbackResource.addResource('entities').addMethod('GET', metricsIntegration, authMethodOptions);
     feedbackResource.addResource('search').addMethod('GET', metricsIntegration, authMethodOptions);
+    // Literal segment; coexists with the {id} sibling because API Gateway
+    // prefers an exact path part over a greedy variable at the same level
+    // (same as urgent/entities/search above).
+    feedbackResource.addResource('custom-field-candidates').addMethod('GET', metricsIntegration, authMethodOptions);
     const problemsResource = feedbackResource.addResource('problems');
+    // Server-side Problem Analysis aggregation (the finest-grain problem tree).
+    problemsResource.addMethod('GET', metricsIntegration, authMethodOptions);
     problemsResource.addResource('resolved').addMethod('GET', metricsIntegration, authMethodOptions);
     const problemIdResource = problemsResource.addResource('{problemId}');
     const problemResolveResource = problemIdResource.addResource('resolve');

@@ -23,6 +23,7 @@ import { useMemo } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import type { DateRangeParams, FeedbackItem } from '../../api/client'
+import { toCustomFieldParams } from '../../api/customFiltersApi'
 import { FEEDBACK_PAGE_LIMIT, nextPageOffset } from '../../api/feedbackPagination'
 import type { FeedbackPage } from '../../api/feedbackPagination'
 import { matchesRatingFilter } from './types'
@@ -53,6 +54,9 @@ function buildCommonParams(dateParams: DateRangeParams, filters: CategoryFilters
     sentiment: filters.sentimentFilter !== 'all' ? filters.sentimentFilter : undefined,
     // The list endpoints accept a single category; multi-select is refined client-side.
     category: filters.selectedCategories.length === 1 ? filters.selectedCategories[0] : undefined,
+    // Custom-field filters flow through as `cf_<key>` params; the backend applies
+    // them as post-filters over the candidate window (Phase 4c).
+    ...toCustomFieldParams(filters.customFilters),
   }
 }
 

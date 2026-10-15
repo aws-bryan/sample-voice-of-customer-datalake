@@ -175,5 +175,22 @@
     "configureFirst": "Configurez le point de terminaison API dans l'onglet Général pour gérer les utilisateurs.",
     "description": "Gérez les utilisateurs, les rôles et les permissions pour la plateforme VoC.",
     "title": "Administration des utilisateurs"
+  },
+  "customFilters": {
+    "title": "Filtres personnalisés",
+    "intro": "Exposez jusqu'à 3 champs de données supplémentaires comme filtres sur la page des retours.",
+    "keyPlaceholder": "Clé du champ",
+    "labelPlaceholder": "Libellé affiché",
+    "add": "Ajouter un filtre",
+    "remove": "Supprimer",
+    "save": "Enregistrer les filtres",
+    "saved": "Enregistré",
+    "saveFailed": "Échec de l'enregistrement des filtres personnalisés. Réessayez.",
+    "loadFailed": "Impossible de charger les filtres personnalisés.",
+    "loading": "Chargement des filtres personnalisés...",
+    "capHint": "Jusqu'à 3 filtres.",
+    "empty": "Aucun filtre personnalisé configuré.",
+    "suggestionsTitle": "Champs suggérés",
+    "noSuggestions": "Aucune suggestion de champ à partir des données récentes."
   }
 }

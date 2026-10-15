@@ -2,7 +2,7 @@
   "description": "Fingerprint of the no-prefix synth. Regenerate with npx ts-node scripts/generate-baseline.ts ONLY for a change intended to alter the default templates — see the script header.",
   "stacks": {
     "VocApiStack": {
-      "templateSha256": "1beac3e41a2ba0dcb4cbd68a5138efc83a787aebc3235e7d744b074ec0a9f1cc",
+      "templateSha256": "d9562bd0c0ae70ab4bae6bbb7a663d728f3862ae1a7ff8be3fa9e51df7217652",
       "names": {
         "physicalNames": [
           "AWS::ApiGateway::Authorizer Name = voc-cognito-authorizer",
@@ -91,7 +91,7 @@
       }
     },
     "VocCoreStack": {
-      "templateSha256": "aa5ab6f599c7b1ad4556bad293ebe17ef36483d17728daabfd3c8f4841140410",
+      "templateSha256": "612c6432611a70cf3c4deb64c303ee1f7ddb27c992278cb6e36ad7492c8f67a0",
       "names": {
         "physicalNames": [
           "AWS::Cognito::IdentityPool IdentityPoolName = voc-identity-pool-<AWS::AccountId>-<AWS::Region>",
@@ -153,7 +153,7 @@
       }
     },
     "VocIngestionStack": {
-      "templateSha256": "477259a9981bade27ceec96e1f1363b4871700e0e89ff1173aac51cb9b92e51e",
+      "templateSha256": "85afc2ab6d7988285c7a6787c830a21406bae48c79cefe7a29bafb365fd063ee",
       "names": {
         "physicalNames": [
           "AWS::Events::Rule Name = voc-ingest-app_reviews_android-schedule-<AWS::AccountId>-<AWS::Region>",
@@ -181,14 +181,16 @@
           "VocIngestionStack:ExportsOutputRefS3ImportBucket676867E6394A2C6C",
           "VocIngestionStack:ExportsOutputRefVocApiSecrets2054A4655D3D7F49"
         ],
-        "policyResources": [],
+        "policyResources": [
+          "arn:aws:lambda:us-east-1:111111111111:function:voc-ingestor-s3_import-<AWS::AccountId>-<AWS::Region>"
+        ],
         "environmentNames": [
           "POWERTOOLS_SERVICE_NAME = voc-ingestion"
         ]
       }
     },
     "VocProcessingStack": {
-      "templateSha256": "be632c9d1172b3cd25eb6335447219884f0678b2885033a19ca791dc4970b9a8",
+      "templateSha256": "b17a3de398ed81a4796ae7cd98cd1bea27d5944f2b8f87062747604efe13c618",
       "names": {
         "physicalNames": [
           "AWS::Lambda::Function FunctionName = voc-aggregation-processor-<AWS::AccountId>-<AWS::Region>",
@@ -212,7 +214,7 @@
       }
     },
     "VocWebSearchStack": {
-      "templateSha256": "0adf6b54c157c7d81365195954a4863bb2dbf62d3124af074870d89afb9dc6cb",
+      "templateSha256": "41cfdf67a39e8eca33b484f75e3900469438c373610632a3a1c4fd2760a98285",
       "names": {
         "physicalNames": [
           "AWS::BedrockAgentCore::Gateway Name = voc-web-search-<AWS::AccountId>-<AWS::Region>"

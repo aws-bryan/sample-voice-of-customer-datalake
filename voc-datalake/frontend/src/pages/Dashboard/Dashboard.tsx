@@ -23,7 +23,8 @@ import { generateDashboardPDF } from './dashboardPdfGenerator'
 import { getTimeRangeLabel } from '../../utils/dateUtils'
 import { useTranslation } from 'react-i18next'
 import DashboardEmptyState from './DashboardEmptyState'
-import { useSummaryQuery } from '../../hooks/useSummaryQuery'
+import { useDashboardSummary } from '../../hooks/useDashboardSummary'
+import EmptyWindowBanner from '../../components/EmptyWindowBanner'
 
 const COLORS = ['#22c55e', '#6b7280', '#ef4444', '#eab308']
 
@@ -340,27 +341,27 @@ export default function Dashboard() {
   const dateParams = getDateRangeParams(timeRange, customDays, dateBasis)
   const isConfigured = !!config.apiEndpoint
 
-  // Shared with the sidebar urgent badge via useSummaryQuery so the two cannot
-  // resolve to different cache entries (see that module).
-  // Takes the endpoint rather than `isConfigured`: the hook owns both the query
-  // key and its enabling condition, so callers cannot make them disagree.
-  const { data: summary, isLoading: summaryLoading } = useSummaryQuery(dateParams, config.apiEndpoint)
+  // Summary + empty-window fallback in one call (see the hook). `summary` is the
+  // fallback window's when a fallback is active, else the selected window's;
+  // `effectiveDateParams` is what the other queries below must use so they match.
+  const { summary, effectiveDateParams, fallback, isLoading: summaryLoading } =
+    useDashboardSummary(dateParams, dateBasis, config.apiEndpoint)
 
   const { data: sentiment } = useQuery({
-    queryKey: ['sentiment', dateParams],
-    queryFn: () => api.getSentiment(dateParams),
+    queryKey: ['sentiment', effectiveDateParams],
+    queryFn: () => api.getSentiment(effectiveDateParams),
     enabled: isConfigured,
   })
 
   const { data: categories } = useQuery({
-    queryKey: ['categories', dateParams],
-    queryFn: () => api.getCategories(dateParams),
+    queryKey: ['categories', effectiveDateParams],
+    queryFn: () => api.getCategories(effectiveDateParams),
     enabled: isConfigured,
   })
 
   const { data: sources } = useQuery({
-    queryKey: ['sources', dateParams],
-    queryFn: () => api.getSources(dateParams),
+    queryKey: ['sources', effectiveDateParams],
+    queryFn: () => api.getSources(effectiveDateParams),
     enabled: isConfigured,
   })
 
@@ -369,8 +370,8 @@ export default function Dashboard() {
   // limits collide on one cache entry (which is how the sidebar badge used to
   // render this list's page size).
   const { data: urgentFeedback } = useQuery({
-    queryKey: ['urgent', dateParams, URGENT_PREVIEW_LIMIT],
-    queryFn: () => api.getUrgentFeedback({ ...dateParams, limit: URGENT_PREVIEW_LIMIT }),
+    queryKey: ['urgent', effectiveDateParams, URGENT_PREVIEW_LIMIT],
+    queryFn: () => api.getUrgentFeedback({ ...effectiveDateParams, limit: URGENT_PREVIEW_LIMIT }),
     enabled: isConfigured,
   })
 
@@ -378,13 +379,17 @@ export default function Dashboard() {
     return <NotConfiguredState />
   }
 
+  // `summaryLoading` (from useDashboardSummary) is true while the selected window
+  // loads OR the fallback probe is resolving, so hold the loading state rather
+  // than flashing the empty prompt before a fallback can resolve.
   if (summaryLoading) {
     return <LoadingState />
   }
 
-  // No feedback in this range → show a compact prompt that points to the Home
-  // page, which carries the full getting-started walkthrough (prd-fix #10
-  // onboarding/IA). Avoids rendering empty charts or duplicating the guide.
+  // Genuinely no data anywhere (not just outside the selected window) → the
+  // onboarding prompt. `summary` here is the effective-window summary, so this
+  // only fires when even the most-recent-data window is empty, i.e. the fallback
+  // found nothing to show.
   if ((summary?.total_feedback ?? 0) === 0) {
     return <DashboardEmptyState />
   }
@@ -409,6 +414,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {fallback ? <EmptyWindowBanner date={fallback.latestDate} /> : null}
       <div className="flex justify-end">
         <button
           onClick={exportPDF}

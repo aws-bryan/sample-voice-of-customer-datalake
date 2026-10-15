@@ -81,10 +81,13 @@
     "settings": "Configurações"
   },
   "partialCountsHint": "Aproximado: não foi possível ler o período completo, as contagens são um limite inferior",
+  "emptyWindowFallback": "Nenhum feedback no período selecionado. Mostrando seus dados mais recentes (de {{date}}).",
   "partialWindowHint": "refine os filtros para ver tudo",
   "problemAnalysisPage": {
     "emptyHint": "Tente ampliar o intervalo de tempo ou ajustar os filtros",
-    "emptyTitle": "Nenhum dado de análise de problemas encontrado para o período selecionado"
+    "emptyTitle": "Nenhum dado de análise de problemas encontrado para o período selecionado",
+    "itemsLoadFailed": "Não foi possível carregar os exemplos.",
+    "noExamples": "Nenhum feedback de exemplo encontrado."
   },
   "problemResolution": {
     "allResolvedHint": "Ative \"Mostrar resolvidos ({{total}})\" acima para revisá-los",
@@ -128,5 +131,9 @@
     "endDate": "Data final",
     "selectDateRange": "Selecionar período",
     "startDate": "Data inicial"
+  },
+  "customFilter": {
+    "filterBy": "Filtrar por {{label}}",
+    "allOf": "Todos: {{label}}"
   }
 }

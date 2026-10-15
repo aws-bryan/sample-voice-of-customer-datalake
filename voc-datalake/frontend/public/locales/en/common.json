@@ -79,9 +79,12 @@
   },
   "partialCountsHint": "Approximate: the full window could not be read, counts are a lower bound",
   "partialWindowHint": "narrow filters to see all",
+  "emptyWindowFallback": "No feedback in the selected time range. Showing your most recent data instead (from {{date}}).",
   "problemAnalysisPage": {
     "emptyHint": "Try expanding the time range or adjusting filters",
-    "emptyTitle": "No problem analysis data found for the selected period"
+    "emptyTitle": "No problem analysis data found for the selected period",
+    "itemsLoadFailed": "Could not load examples.",
+    "noExamples": "No example feedback found."
   },
   "problemResolution": {
     "allResolvedHint": "Enable \"Show resolved ({{total}})\" above to review them",
@@ -124,5 +127,9 @@
     "endDate": "End Date",
     "selectDateRange": "Select Date Range",
     "startDate": "Start Date"
+  },
+  "customFilter": {
+    "filterBy": "Filter by {{label}}",
+    "allOf": "All {{label}}"
   }
 }

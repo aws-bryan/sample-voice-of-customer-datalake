@@ -232,5 +232,64 @@ describe('useCategoryFilters', () => {
       })
       expect(result.current.filters.hasActiveFilters).toBe(false)
     })
+
+    it('is true when a custom filter is selected', () => {
+      const { result } = renderFiltersWithUrl(['/categories?cf_region=EMEA'])
+      expect(result.current.filters.hasActiveFilters).toBe(true)
+    })
+  })
+
+  describe('custom-field filters (Phase 4d)', () => {
+    it('initializes customFilters from cf_<key>= params', () => {
+      const { result } = renderFiltersWithUrl(['/categories?cf_region=EMEA&cf_plan=pro'])
+      expect(result.current.filters.customFilters).toEqual({ region: 'EMEA', plan: 'pro' })
+    })
+
+    it('ignores a bare cf_ param with an empty value', () => {
+      const { result } = renderFiltersWithUrl(['/categories?cf_region='])
+      expect(result.current.filters.customFilters).toEqual({})
+    })
+
+    it('mirrors a selected custom filter to the URL', () => {
+      const { result } = renderFiltersWithUrl()
+      act(() => {
+        result.current.filters.setCustomFilter('region', 'APAC')
+      })
+      expect(result.current.searchParams.get('cf_region')).toBe('APAC')
+      expect(result.current.filters.customFilters).toEqual({ region: 'APAC' })
+    })
+
+    it('clearing a custom filter (empty value) drops it from state and the URL', () => {
+      const { result } = renderFiltersWithUrl(['/categories?cf_region=EMEA'])
+      act(() => {
+        result.current.filters.setCustomFilter('region', '')
+      })
+      expect(result.current.filters.customFilters).toEqual({})
+      expect(result.current.searchParams.get('cf_region')).toBeNull()
+    })
+
+    it('clearFilters removes custom filters too', () => {
+      const { result } = renderFiltersWithUrl(['/categories?cf_region=EMEA&cf_plan=pro'])
+      act(() => {
+        result.current.filters.clearFilters()
+      })
+      expect(result.current.filters.customFilters).toEqual({})
+      expect([...result.current.searchParams.keys()]).toEqual([])
+    })
+
+    it('adopts custom filters from an external navigation', () => {
+      const { result } = renderHook(
+        () => {
+          const filters = useCategoryFilters()
+          const navigate = useNavigate()
+          return { filters, navigate }
+        },
+        { wrapper: createWrapper(['/categories']) }
+      )
+      act(() => {
+        result.current.navigate('/categories?cf_tier=gold')
+      })
+      expect(result.current.filters.customFilters).toEqual({ tier: 'gold' })
+    })
   })
 })

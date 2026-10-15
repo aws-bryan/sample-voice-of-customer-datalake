@@ -164,5 +164,22 @@
     "configureFirst": "请在常规选项卡中配置API端点以管理用户。",
     "description": "管理VoC平台的用户、角色和权限。",
     "title": "用户管理"
+  },
+  "customFilters": {
+    "title": "自定义筛选器",
+    "intro": "在反馈页面上将最多 3 个额外数据字段显示为筛选器。",
+    "keyPlaceholder": "字段键",
+    "labelPlaceholder": "显示名称",
+    "add": "添加筛选器",
+    "remove": "移除",
+    "save": "保存筛选器",
+    "saved": "已保存",
+    "saveFailed": "保存自定义筛选器失败。请重试。",
+    "loadFailed": "无法加载自定义筛选器。",
+    "loading": "正在加载自定义筛选器...",
+    "capHint": "最多 3 个筛选器。",
+    "empty": "未配置自定义筛选器。",
+    "suggestionsTitle": "建议的字段",
+    "noSuggestions": "最近的数据中没有字段建议。"
   }
 }

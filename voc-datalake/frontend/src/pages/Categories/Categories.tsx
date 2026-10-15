@@ -24,6 +24,9 @@ import { generateCategoriesPDF } from './categoriesPdfGenerator'
 import { useCategoryFilters } from './useCategoryFilters'
 import { useFeedbackListData } from './useFeedbackListData'
 import { useCategoryAnalytics } from './useCategoryAnalytics'
+import { useCustomFilterControls } from './useCustomFilterControls'
+import { useEmptyWindowFallback } from '../../hooks/useEmptyWindowFallback'
+import EmptyWindowBanner from '../../components/EmptyWindowBanner'
 import { csvField } from '../../utils/csv'
 import { useTranslation } from 'react-i18next'
 
@@ -73,8 +76,23 @@ export default function Categories() {
   const filters = useCategoryFilters()
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
 
-  const analytics = useCategoryAnalytics(dateParams, filters.selectedSource, config.apiEndpoint)
-  const feedback = useFeedbackListData(dateParams, filters, config.apiEndpoint)
+  // Analytics on the user's selected window first — its emptiness decides whether
+  // to fall back. Only fall back when NO filters are active: a filtered window
+  // that matches nothing is an honest empty result (the user asked a specific
+  // question), not stale-data-out-of-range, so widening it would surface
+  // unrelated feedback and misrepresent the filter.
+  const selectedAnalytics = useCategoryAnalytics(dateParams, filters.selectedSource, config.apiEndpoint)
+  const selectedEmpty = !filters.hasActiveFilters && !selectedAnalytics.isLoading && selectedAnalytics.totalIssues === 0
+  const { effectiveDateParams, fallback, isResolving } = useEmptyWindowFallback(
+    dateParams, selectedEmpty, selectedAnalytics.isLoading, config.apiEndpoint, dateBasis,
+  )
+
+  // Re-query at the effective window. When no fallback is active
+  // effectiveDateParams === dateParams, so these resolve to the same cache
+  // entries as the probe queries above (no extra fetch).
+  const analytics = useCategoryAnalytics(effectiveDateParams, filters.selectedSource, config.apiEndpoint)
+  const feedback = useFeedbackListData(effectiveDateParams, filters, config.apiEndpoint)
+  const customFilterControls = useCustomFilterControls(config.apiEndpoint, filters.customFilters)
 
   const exportCsv = () => exportFeedbackCsv(feedback.filteredFeedback)
 
@@ -98,7 +116,9 @@ export default function Categories() {
     )
   }
 
-  if (analytics.isLoading) {
+  // `isResolving` holds the spinner while the empty-window probe runs, so the
+  // page doesn't briefly render an empty grid before the fallback widens.
+  if (analytics.isLoading || isResolving) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -108,6 +128,7 @@ export default function Categories() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {fallback ? <EmptyWindowBanner date={fallback.latestDate} /> : null}
       <FilterBar
         searchText={filters.searchText}
         onSearchChange={filters.setSearchText}
@@ -120,6 +141,8 @@ export default function Categories() {
         onRatingFilterChange={filters.setRatingFilter}
         hasActiveFilters={filters.hasActiveFilters}
         onClearFilters={filters.clearFilters}
+        customFilterControls={customFilterControls}
+        onCustomFilterChange={filters.setCustomFilter}
         trailing={
           <button
             onClick={exportPdf}

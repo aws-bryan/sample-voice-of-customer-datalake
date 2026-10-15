@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
-import { ChevronDown, ChevronRight, AlertTriangle, Lightbulb, CheckCircle2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle, Lightbulb, CheckCircle2, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import clsx from 'clsx'
 import SentimentBadge from '../../components/SentimentBadge'
-import type { FeedbackItem } from '../../api/client'
+import type { FeedbackItem, DateRangeParams } from '../../api/client'
 import type { ProblemGroup } from './problemResolution'
+import { useProblemItems } from './useProblemItems'
 
 function getSentimentLabel(score: number): 'positive' | 'negative' | 'neutral' {
   if (score > 0) return 'positive'
@@ -12,9 +13,21 @@ function getSentimentLabel(score: number): 'positive' | 'negative' | 'neutral' {
   return 'neutral'
 }
 
+/** Window + source for the on-demand fetch of a problem's feedback rows. */
+export interface ProblemDrillParams {
+  readonly dateParams: DateRangeParams
+  readonly source: string | null
+  /** Custom-field selections, applied to the drill-down so example rows match
+   * the same filter as the aggregated tree. */
+  readonly customFilters: Record<string, string>
+}
+
 interface ProblemRowProps {
   readonly problemGroup: ProblemGroup
   readonly problemKey: string
+  readonly categoryName: string
+  readonly subcategoryName: string
+  readonly drillParams: ProblemDrillParams
   readonly isExpanded: boolean
   readonly onToggle: () => void
   readonly onToggleResolved: () => void
@@ -68,8 +81,18 @@ function ResolveToggleButton({ resolved, onToggleResolved, disabled }: Readonly<
   )
 }
 
-export function ProblemRow({ problemGroup, problemKey, isExpanded, onToggle, onToggleResolved, resolvePending }: ProblemRowProps) {
+export function ProblemRow({
+  problemGroup, problemKey, categoryName, subcategoryName, drillParams,
+  isExpanded, onToggle, onToggleResolved, resolvePending,
+}: ProblemRowProps) {
   const resolved = problemGroup.resolved === true
+  // The merged group's texts: its representative plus the problems folded into
+  // it, so the on-demand fetch narrows to exactly this group's rows.
+  const problemTexts = [problemGroup.problem, ...problemGroup.similarProblems]
+  const drill = useProblemItems(
+    drillParams.dateParams, categoryName, subcategoryName, problemTexts,
+    drillParams.source, isExpanded, drillParams.customFilters,
+  )
   return (
     <div key={problemKey} className="bg-white relative">
       <button
@@ -103,7 +126,7 @@ export function ProblemRow({ problemGroup, problemKey, isExpanded, onToggle, onT
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 ml-6 sm:ml-4 flex-shrink-0">
-          <span className="text-xs text-gray-500">{problemGroup.items.length}</span>
+          <span className="text-xs text-gray-500">{problemGroup.itemCount}</span>
           {problemGroup.urgentCount > 0 && (
             <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">
               {problemGroup.urgentCount}
@@ -119,12 +142,47 @@ export function ProblemRow({ problemGroup, problemKey, isExpanded, onToggle, onT
 
       {isExpanded && (
         <div className="px-3 sm:px-6 pb-3 sm:pb-4 pl-12 sm:pl-24 space-y-2 sm:space-y-3">
-          {problemGroup.items.map((item) => (
-            <FeedbackItemCard key={item.feedback_id} item={item} problemSummary={problemGroup.problem} />
-          ))}
+          <ProblemItemsList
+            items={drill.items}
+            isLoading={drill.isLoading}
+            isError={drill.isError}
+            problemSummary={problemGroup.problem}
+          />
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * The feedback rows behind an expanded problem, fetched on demand. Shows a
+ * spinner while loading, a quiet error line on failure, and up to a page of
+ * example rows (the drill-down is a sample for inspection — the true total is
+ * the count badge on the row, from the server aggregate).
+ */
+function ProblemItemsList({
+  items, isLoading, isError, problemSummary,
+}: Readonly<{ items: FeedbackItem[]; isLoading: boolean; isError: boolean; problemSummary: string }>) {
+  const { t } = useTranslation('common')
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
+        <Loader2 size={14} className="animate-spin" /> {t('loading')}
+      </div>
+    )
+  }
+  if (isError) {
+    return <p className="text-xs text-red-600 py-2" role="alert">{t('problemAnalysisPage.itemsLoadFailed')}</p>
+  }
+  if (items.length === 0) {
+    return <p className="text-xs text-gray-400 py-2">{t('problemAnalysisPage.noExamples')}</p>
+  }
+  return (
+    <>
+      {items.map((item) => (
+        <FeedbackItemCard key={item.feedback_id} item={item} problemSummary={problemSummary} />
+      ))}
+    </>
   )
 }
 

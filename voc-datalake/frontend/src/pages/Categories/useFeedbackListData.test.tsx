@@ -27,6 +27,7 @@ const baseFilters: CategoryFiltersState = {
   sentimentFilter: 'all',
   ratingFilter: { value: 0, direction: 'up' },
   showUrgentOnly: false,
+  customFilters: {},
 }
 
 function makeItem(overrides: Record<string, unknown> = {}) {
@@ -116,6 +117,22 @@ describe('useFeedbackListData', () => {
       renderData({ ...baseFilters, selectedCategories: ['delivery'] })
       await waitFor(() =>
         expect(mockGetFeedback).toHaveBeenCalledWith(expect.objectContaining({ category: 'delivery' }))
+      )
+    })
+
+    it('threads custom filters through as cf_<key> params', async () => {
+      renderData({ ...baseFilters, customFilters: { region: 'EMEA', tier: 'gold' } })
+      await waitFor(() =>
+        expect(mockGetFeedback).toHaveBeenCalledWith(
+          expect.objectContaining({ cf_region: 'EMEA', cf_tier: 'gold' })
+        )
+      )
+    })
+
+    it('passes custom filters to the search endpoint too', async () => {
+      renderData({ ...baseFilters, searchText: 'slow', customFilters: { region: 'EMEA' } })
+      await waitFor(() =>
+        expect(mockSearchFeedback).toHaveBeenCalledWith(expect.objectContaining({ cf_region: 'EMEA' }))
       )
     })
 

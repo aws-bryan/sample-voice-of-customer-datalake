@@ -167,4 +167,49 @@ describe('FilterBar', () => {
 
     expect(screen.queryByTestId('filter-bar-trailing')).not.toBeInTheDocument()
   })
+
+  describe('custom-field filters (Phase 4d)', () => {
+    const controls = [
+      { key: 'region', label: 'Region', values: ['EMEA', 'APAC'], selected: '' },
+    ]
+
+    it('renders a dropdown per configured custom filter with its suggested values', () => {
+      render(
+        <FilterBar {...defaultProps} customFilterControls={controls} onCustomFilterChange={vi.fn()} />
+      )
+      const select = screen.getByRole('combobox', { name: /filter by region/i })
+      expect(select).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: 'EMEA' })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: 'APAC' })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: 'All Region' })).toBeInTheDocument()
+    })
+
+    it('fires onCustomFilterChange with the key and chosen value', async () => {
+      const user = userEvent.setup()
+      const onCustomFilterChange = vi.fn()
+      render(
+        <FilterBar {...defaultProps} customFilterControls={controls} onCustomFilterChange={onCustomFilterChange} />
+      )
+      await user.selectOptions(screen.getByRole('combobox', { name: /filter by region/i }), 'EMEA')
+      expect(onCustomFilterChange).toHaveBeenCalledWith('region', 'EMEA')
+    })
+
+    it('keeps a selected value visible even when it is not among the suggestions', () => {
+      render(
+        <FilterBar
+          {...defaultProps}
+          customFilterControls={[{ key: 'region', label: 'Region', values: ['EMEA'], selected: 'LATAM' }]}
+          onCustomFilterChange={vi.fn()}
+        />
+      )
+      const select = screen.getByRole('combobox', { name: /filter by region/i })
+      expect(select).toHaveValue('LATAM')
+      expect(screen.getByRole('option', { name: 'LATAM' })).toBeInTheDocument()
+    })
+
+    it('renders no custom dropdowns when there are no controls', () => {
+      render(<FilterBar {...defaultProps} customFilterControls={[]} onCustomFilterChange={vi.fn()} />)
+      expect(screen.queryByRole('combobox', { name: /filter by region/i })).not.toBeInTheDocument()
+    })
+  })
 })

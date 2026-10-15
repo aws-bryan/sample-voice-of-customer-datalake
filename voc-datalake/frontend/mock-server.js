@@ -29,6 +29,9 @@ const mockFeedback = [
     // see the note beside PERSONA_FIELD in lambda/shared/feedback.py.
     persona_name: 'Impatient Shopper',
     persona_type: 'churn_risk',
+    // Extra import fields persisted as a nested map (Phase 2) — drives the
+    // custom-filter demo locally. Only a few items carry these on purpose.
+    custom_fields: { region: 'EMEA', plan: 'enterprise' },
     // Written today, imported today
     source_created_at: new Date().toISOString(),
     processed_at: new Date().toISOString(),
@@ -51,6 +54,7 @@ const mockFeedback = [
     direct_customer_quote: 'resolved my issue within minutes',
     persona_name: 'Satisfied Customer',
     persona_type: 'advocate',
+    custom_fields: { region: 'APAC', plan: 'free' },
     // Written 3 days ago, imported today
     source_created_at: daysAgo(3),
     processed_at: new Date().toISOString(),
@@ -95,6 +99,52 @@ function filterByDateBasis(items, searchParams) {
   });
 }
 
+// Apply cf_<key>=<value> post-filters (Phase 4c), mirroring the backend:
+// str() coalescing, AND across keys, missing field fails the match.
+function applyCustomFieldFilters(items, searchParams) {
+  if (!searchParams) return items;
+  const filters = [];
+  for (const [rawKey, value] of searchParams.entries()) {
+    if (rawKey.startsWith('cf_') && value !== '') filters.push([rawKey.slice(3), value]);
+  }
+  if (filters.length === 0) return items;
+  return items.filter((item) => {
+    const fields = item.custom_fields;
+    if (!fields || typeof fields !== 'object') return false;
+    return filters.every(([key, want]) => fields[key] != null && String(fields[key]) === want);
+  });
+}
+
+// Rank custom_fields keys by repeating values (Phase 4b), mirroring the backend
+// bands: 2..50 distinct values, >=10% coverage.
+function rankCustomFieldCandidates(items) {
+  const total = items.length;
+  if (total === 0) return [];
+  const valueCounts = {};
+  for (const item of items) {
+    const fields = item.custom_fields;
+    if (!fields || typeof fields !== 'object') continue;
+    for (const [key, value] of Object.entries(fields)) {
+      if (value == null || value === '') continue;
+      (valueCounts[key] ??= {});
+      const sval = String(value);
+      valueCounts[key][sval] = (valueCounts[key][sval] || 0) + 1;
+    }
+  }
+  const candidates = [];
+  for (const [key, counts] of Object.entries(valueCounts)) {
+    const distinct = Object.keys(counts).length;
+    const covered = Object.values(counts).reduce((a, b) => a + b, 0);
+    const coverage = covered / total;
+    if (distinct < 2 || distinct > 50 || coverage < 0.1) continue;
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([value, count]) => ({ value, count }));
+    candidates.push({ key, distinct_values: distinct, coverage: Math.round(coverage * 1000) / 1000, top_values: top });
+  }
+  candidates.sort((a, b) => b.coverage - a.coverage || a.distinct_values - b.distinct_values || a.key.localeCompare(b.key));
+  return candidates;
+}
+
 // Mock sources status
 const mockSourcesStatus = {
   sources: [
@@ -126,11 +176,17 @@ const mockResolvedProblems = {};
 // Per-surface AI model picker state (issue #96) — mutable so selects round-trip.
 // Mirrors lambda/shared/model_config.py (source of truth, lockstep-tested there).
 const mockModelSurfaces = {};
+
+// Custom-field filters (Phase 4) — mutable so the Settings card round-trips.
+let mockCustomFilters = [{ key: 'region', label: 'Region' }];
 const mockAvailableModels = [
-  { key: 'sonnet5', id: 'global.anthropic.claude-sonnet-5', label: 'Claude Sonnet 5', description: 'Latest, highest-quality Sonnet — best for analysis and generation' },
+  { key: 'sonnet55', id: 'global.anthropic.claude-sonnet-5-5', label: 'Claude Sonnet 5.5', description: 'Newest Sonnet — highest-quality analysis and generation' },
+  { key: 'sonnet5', id: 'global.anthropic.claude-sonnet-5', label: 'Claude Sonnet 5', description: 'High-quality Sonnet — strong for analysis and generation' },
   { key: 'sonnet46', id: 'global.anthropic.claude-sonnet-4-6', label: 'Claude Sonnet 4.6', description: 'Previous-generation Sonnet — strong quality, accepts temperature tuning' },
+  { key: 'opus55', id: 'global.anthropic.claude-opus-5-5', label: 'Claude Opus 5.5', description: 'Newest Opus — deepest reasoning for prototypes and complex documents' },
   { key: 'opus5', id: 'global.anthropic.claude-opus-5', label: 'Claude Opus 5', description: 'Deepest reasoning — best for prototypes and complex documents' },
   { key: 'opus48', id: 'global.anthropic.claude-opus-4-8', label: 'Claude Opus 4.8', description: 'Previous-generation Opus — also the automatic fallback when Opus 5 declines a request' },
+  { key: 'haiku55', id: 'global.anthropic.claude-haiku-5-5', label: 'Claude Haiku 5.5', description: 'Newest Haiku — fast and cheap for high-volume enrichment' },
   { key: 'haiku45', id: 'global.anthropic.claude-haiku-4-5-20251001-v1:0', label: 'Claude Haiku 4.5', description: 'Fastest and cheapest — good for high-volume enrichment' },
 ];
 const mockSurfaceDefaults = {
@@ -407,6 +463,19 @@ const handlers = {
     return { success: true, surface, model_id: modelId };
   },
 
+  // Settings - Custom-field filters (Phase 4)
+  'GET /settings/custom-filters': () => ({ custom_filters: mockCustomFilters, updated_at: null }),
+  'PUT /settings/custom-filters': (body) => {
+    const raw = Array.isArray(body?.custom_filters) ? body.custom_filters : [];
+    if (raw.length > 3) {
+      return { __status: 400, body: { success: false, message: 'At most 3 custom filters are allowed' } };
+    }
+    mockCustomFilters = raw
+      .filter((f) => f && typeof f.key === 'string' && f.key.trim())
+      .map((f) => ({ key: f.key.trim(), label: (f.label && String(f.label).trim()) || f.key.trim() }));
+    return { success: true, custom_filters: mockCustomFilters };
+  },
+
   'GET /settings/resolved-problems': () => ({ resolved: mockResolvedProblems }),
   'PUT /settings/resolved-problems': (body) => {
     if (!body || typeof body.key !== 'string' || body.key.trim() === '' || typeof body.resolved !== 'boolean') {
@@ -432,12 +501,16 @@ const handlers = {
   'POST /scrapers': (body) => ({ success: true, scraper: { id: 'scraper_' + Date.now(), ...body } }),
 
   'GET /feedback': (_body, searchParams) => {
-    const items = filterByDateBasis(mockFeedback, searchParams);
+    const items = applyCustomFieldFilters(filterByDateBasis(mockFeedback, searchParams), searchParams);
     return { count: items.length, total: items.length, offset: 0, limit: 50, is_partial_window: false, items };
   },
   'GET /feedback/urgent': (_body, searchParams) => {
-    const items = filterByDateBasis(mockFeedback, searchParams).filter(f => f.urgency === 'high');
+    const items = applyCustomFieldFilters(filterByDateBasis(mockFeedback, searchParams), searchParams).filter(f => f.urgency === 'high');
     return { count: items.length, items };
+  },
+  'GET /feedback/custom-field-candidates': (_body, searchParams) => {
+    const items = filterByDateBasis(mockFeedback, searchParams);
+    return { sampled_count: items.length, is_partial: false, candidates: rankCustomFieldCandidates(items) };
   },
   'GET /feedback/entities': (_body, searchParams) => {
     const items = filterByDateBasis(mockFeedback, searchParams);
