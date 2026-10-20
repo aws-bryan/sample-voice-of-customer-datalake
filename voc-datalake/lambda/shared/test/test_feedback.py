@@ -141,6 +141,87 @@ class TestGetFeedbackContext:
         assert result[0]['feedback_id'] == '1'
 
 
+class TestGetFeedbackContextExtraFilters:
+    """The `feedback_filters` post-pass (shared-model extra dimensions)."""
+
+    def _table_returning(self, items):
+        """A mock table whose first date query yields `items`, then empties."""
+        mock_table = MagicMock()
+        mock_table.query.side_effect = [{'Items': items}] + [{'Items': []} for _ in range(40)]
+        return mock_table
+
+    def test_narrows_by_urgent_when_feedback_filters_present(self):
+        """urgent=true drops non-high-urgency items the date query returned."""
+        from shared.feedback import get_feedback_context
+
+        mock_table = self._table_returning([
+            {'feedback_id': '1', 'urgency': 'high'},
+            {'feedback_id': '2', 'urgency': 'low'},
+            {'feedback_id': '3', 'urgency': 'high'},
+        ])
+
+        result = get_feedback_context(
+            mock_table,
+            {'days': 7, 'feedback_filters': {'urgent': True}},
+            limit=10,
+        )
+
+        assert [i['feedback_id'] for i in result] == ['1', '3']
+
+    def test_narrows_by_custom_field(self):
+        """custom_fields matches on the stored custom_fields map."""
+        from shared.feedback import get_feedback_context
+
+        mock_table = self._table_returning([
+            {'feedback_id': '1', 'custom_fields': {'tier': 'Gold'}},
+            {'feedback_id': '2', 'custom_fields': {'tier': 'Silver'}},
+            {'feedback_id': '3', 'custom_fields': {'tier': 'Gold'}},
+        ])
+
+        result = get_feedback_context(
+            mock_table,
+            {'days': 7, 'feedback_filters': {'custom_fields': {'tier': ['Gold']}}},
+            limit=10,
+        )
+
+        assert [i['feedback_id'] for i in result] == ['1', '3']
+
+    def test_empty_feedback_filters_is_a_noop(self):
+        """An empty feedback_filters returns the same set as omitting it."""
+        from shared.feedback import get_feedback_context
+
+        items = [{'feedback_id': '1', 'urgency': 'low'}, {'feedback_id': '2', 'urgency': 'high'}]
+
+        result = get_feedback_context(
+            self._table_returning(items), {'days': 7, 'feedback_filters': {}}, limit=10,
+        )
+
+        assert [i['feedback_id'] for i in result] == ['1', '2']
+
+    def test_limit_applies_after_the_post_pass(self):
+        """limit counts items that PASSED the post-filter, not pre-filter rows.
+
+        The query would truncate before the post-pass if the extra filter were
+        applied to an already-sliced list; this is the regression guard for that.
+        """
+        from shared.feedback import get_feedback_context
+
+        # 10 rows: 5 high, 5 low, interleaved so a pre-slice to limit=3 would
+        # keep only 2 high. The post-pass must see all 10 and return 3 high.
+        rows = []
+        for i in range(10):
+            rows.append({'feedback_id': str(i), 'urgency': 'high' if i % 2 == 0 else 'low'})
+
+        result = get_feedback_context(
+            self._table_returning(rows),
+            {'days': 7, 'feedback_filters': {'urgent': True}},
+            limit=3,
+        )
+
+        assert len(result) == 3
+        assert all(i['urgency'] == 'high' for i in result)
+
+
 class TestFormatFeedbackForLlm:
     """Tests for format_feedback_for_llm function."""
 

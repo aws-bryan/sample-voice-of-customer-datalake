@@ -67,6 +67,7 @@ export default function DataSourceWizard({
     sources,
     categories,
     loadingCategories,
+    customFilterControls,
     researchDocs,
     otherDocs,
     showFeedback,
@@ -121,6 +122,7 @@ export default function DataSourceWizard({
             categories={categories}
             loadingCategories={loadingCategories}
             colors={colors}
+            customFilterControls={customFilterControls}
           />
         )}
 

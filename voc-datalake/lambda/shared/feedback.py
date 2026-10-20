@@ -234,6 +234,15 @@ MAX_LOOKBACK_DAYS = 90
 # ever see the first ~500 items of a partition (the "500개 중" truncation bug).
 MAX_ITEMS_PER_PARTITION = 10000
 
+# Candidate window for the LLM-context post-filter path (get_feedback_context
+# with extra `feedback_filters`). The extra dimensions are matched in memory
+# AFTER the date/source/category/sentiment query, so that query must return a
+# wider set than the caller's final `limit` or the post-pass has nothing to
+# narrow. Bounded so a wide window cannot pull an unbounded set into memory for
+# the match loop; comfortably above every FEEDBACK_LIMIT_* the Projects callers
+# pass (all <= a few hundred) while leaving headroom for a selective filter.
+MAX_CONTEXT_CANDIDATES = 2000
+
 # Shape guard for basis dates: a malformed source_created_at (e.g.
 # "unavailable") would otherwise compare lexicographically above any
 # YYYY-MM-DD cutoff.
@@ -609,21 +618,60 @@ def get_feedback_context(feedback_table, filters: dict, limit: int = 50) -> list
     Args:
         feedback_table: DynamoDB Table resource for feedback
         filters: Dict with keys: days, categories, sentiments, sources,
-            date_basis ('imported' default | 'review')
+            date_basis ('imported' default | 'review'). May also carry
+            ``feedback_filters``: the full shared filter model's ``to_dict()``
+            (subcategory / urgent / enrichment / ``custom_fields``), applied as
+            an in-memory post-pass on top of the date/source/category/sentiment
+            window above. Absent or empty means no extra narrowing, so existing
+            callers are unaffected.
         limit: Maximum number of items to return
 
     Returns:
         List of feedback items matching filters
     """
-    return query_feedback_by_date(
+    extra = _parse_extra_filters(filters.get('feedback_filters'))
+    # No extra dimensions: the original single-pass path, limit applied in the
+    # query. Nothing changes for callers that do not send ``feedback_filters``.
+    if extra is None or extra.is_empty:
+        return query_feedback_by_date(
+            feedback_table,
+            days=filters.get('days', 30),
+            sources=filters.get('sources'),
+            categories=filters.get('categories'),
+            sentiments=filters.get('sentiments'),
+            limit=limit,
+            date_basis=filters.get('date_basis') or DATE_BASIS_IMPORTED,
+        )
+
+    # Extra dimensions are matched in memory AFTER the date/source/category/
+    # sentiment query, so the query's own ``limit`` would truncate the window
+    # BEFORE the post-pass ran and silently under-return. Fetch a wider
+    # candidate window (bounded by MAX_CONTEXT_CANDIDATES), post-filter, then
+    # slice to ``limit``.
+    candidates = query_feedback_by_date(
         feedback_table,
         days=filters.get('days', 30),
         sources=filters.get('sources'),
         categories=filters.get('categories'),
         sentiments=filters.get('sentiments'),
-        limit=limit,
+        limit=MAX_CONTEXT_CANDIDATES,
         date_basis=filters.get('date_basis') or DATE_BASIS_IMPORTED,
     )
+    matched = [item for item in candidates if extra.matches(item)]
+    return matched[:limit]
+
+
+def _parse_extra_filters(raw: dict | None):
+    """Build a FeedbackFilters from a stored ``to_dict()`` map, or None.
+
+    Imported lazily so this data-layer module keeps a narrow import graph (the
+    same reason the lazy imports elsewhere in it exist) and does not pull the
+    filter model into every consumer of ``shared.feedback``.
+    """
+    if not raw:
+        return None
+    from shared.feedback_filters import FeedbackFilters
+    return FeedbackFilters.from_mapping(raw)
 def format_feedback_for_llm(items: list[dict]) -> str:
     """Format feedback items for LLM context with rich details.
     

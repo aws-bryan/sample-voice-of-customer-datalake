@@ -7,6 +7,7 @@ import {
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { projectsApi } from '../../api/projectsApi'
+import { toFeedbackQueryParams } from '../../api/feedbackFilters'
 import { projectKey } from '../../api/projectQueryKeys'
 import { usePrototypeLinkRefresh } from '../../components/usePrototypeLinkRefresh'
 import type {
@@ -256,6 +257,10 @@ export function useProjectMutations({
       custom_instructions: personaConfig.customInstructions,
       days: contextConfig.days,
       response_language: i18n.language,
+      // The richer shared-model dimensions (subcategory / urgent / enrichment /
+      // cf_*). The flat sources/categories/sentiments above drive the DynamoDB
+      // query; these narrow it further via the backend post-pass.
+      extraFilters: toFeedbackQueryParams(contextConfig.feedback),
     }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: projectJobsKey(id) })
@@ -307,6 +312,8 @@ export function useProjectMutations({
       selected_document_ids: [...contextConfig.selectedDocumentIds, ...contextConfig.selectedResearchIds],
       response_language: i18n.language,
       use_web_search: researchConfig.useWebSearch,
+      // See personaMut: the richer shared-model dimensions, post-filtered server-side.
+      extraFilters: toFeedbackQueryParams(contextConfig.feedback),
     }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: projectJobsKey(id) })

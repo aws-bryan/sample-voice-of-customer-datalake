@@ -3,6 +3,7 @@
 import { fetchApi } from './client'
 import { getDateBasisBodyParams } from './baseUrl'
 import { normalizeProjectDetail } from './projectDetailSchema'
+import type { FilterParamValue } from './feedbackFilters'
 import type {
   Project, ProjectDetail, ProjectPersona, ProjectDocument, ProjectJob,
   ProductContext, ProductDoc, ProductInterviewTurnResponse,
@@ -11,6 +12,60 @@ import type {
   // it for the signature pin at the foot of this file.
   GenerateDocumentBody, BothWays,
 } from './types'
+
+/**
+ * The richer shared-model filter dimensions (subcategory / urgent / enrichment
+ * / cf_*) as `toFeedbackQueryParams` emits them: wire keys to a string or a
+ * repeated-key list.
+ *
+ * Carried on the persona/research requests as a SEPARATE `extraFilters` bag
+ * rather than merged into the request type, because this string/list index
+ * signature cannot coexist with the numeric `days` / boolean `use_web_search`
+ * those requests also carry. `mergeFilterBody` flattens it into the POST body,
+ * where the backend parses the whole thing with FeedbackFilters.
+ */
+type FilterBody = Readonly<Record<string, FilterParamValue>>
+
+interface PersonaGenerateBody {
+  sources?: string[]
+  categories?: string[]
+  sentiments?: string[]
+  persona_count?: number
+  custom_instructions?: string
+  days?: number
+  response_language?: string
+  extraFilters?: FilterBody
+}
+
+interface ResearchBody {
+  question: string
+  title?: string
+  sources?: string[]
+  categories?: string[]
+  sentiments?: string[]
+  days?: number
+  selected_persona_ids?: string[]
+  selected_document_ids?: string[]
+  response_language?: string
+  use_web_search?: boolean
+  extraFilters?: FilterBody
+}
+
+/**
+ * The request body: the named fields minus `extraFilters`, with the filter bag
+ * flattened to the top level (so `cf_tier`, `urgent`, etc. sit beside `days`).
+ * Done here rather than with an index-signature intersection, which TypeScript
+ * rejects when a named field (`days: number`) is not assignable to the
+ * signature's value type.
+ */
+function mergeFilterBody(
+  base: Record<string, unknown>,
+  body: { extraFilters?: FilterBody } | undefined,
+): Record<string, unknown> {
+  if (!body) return base
+  const { extraFilters, ...named } = body
+  return { ...base, ...named, ...(extraFilters ?? {}) }
+}
 
 export const projectsApi = {
   getProjects: () => fetchApi<{ projects: Project[] }>('/projects'),
@@ -42,15 +97,7 @@ export const projectsApi = {
   deleteProject: (id: string) =>
     fetchApi<{ success: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
 
-  generatePersonas: (projectId: string, filters?: {
-    sources?: string[]
-    categories?: string[]
-    sentiments?: string[]
-    persona_count?: number
-    custom_instructions?: string
-    days?: number
-    response_language?: string
-  }) =>
+  generatePersonas: (projectId: string, filters?: PersonaGenerateBody) =>
     // Async since the work moved to the persona-generator Lambda: the route answers
     // with a job id and the UI polls the jobs list. It has not returned `personas`
     // (or an `analysis` blob) for some time — the old synchronous shape lingered here
@@ -62,7 +109,7 @@ export const projectsApi = {
       message: string;
     }>(`/projects/${projectId}/personas/generate`, {
       method: 'POST',
-      body: JSON.stringify({ ...getDateBasisBodyParams(), ...(filters ?? {}) }),
+      body: JSON.stringify(mergeFilterBody(getDateBasisBodyParams(), filters)),
     }),
 
   createPersona: (projectId: string, persona: Omit<ProjectPersona, 'persona_id' | 'created_at'>) =>
@@ -100,18 +147,7 @@ export const projectsApi = {
       body: JSON.stringify(data),
     }),
 
-  runResearch: (projectId: string, data: {
-    question: string
-    title?: string
-    sources?: string[]
-    categories?: string[]
-    sentiments?: string[]
-    days?: number
-    selected_persona_ids?: string[]
-    selected_document_ids?: string[]
-    response_language?: string
-    use_web_search?: boolean
-  }) =>
+  runResearch: (projectId: string, data: ResearchBody) =>
     fetchApi<{
       success: boolean;
       job_id: string;
@@ -119,7 +155,7 @@ export const projectsApi = {
       message: string
     }>(`/projects/${projectId}/research`, {
       method: 'POST',
-      body: JSON.stringify({ ...getDateBasisBodyParams(), ...data }),
+      body: JSON.stringify(mergeFilterBody(getDateBasisBodyParams(), data)),
     }),
 
   // Keep this signature on ONE line, and keep `data` taking the shared type by name:

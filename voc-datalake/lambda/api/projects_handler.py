@@ -26,6 +26,7 @@ from shared.api import (
     # they are open; sort this block once both have landed.
     require_admin,
 )
+from shared.feedback_filters import FeedbackFilters
 from shared.tables import get_jobs_table, get_aggregates_table, get_projects_table
 from shared.jobs import create_job
 from shared.exceptions import (
@@ -235,6 +236,23 @@ def api_regenerate_persona_avatar(project_id: str, persona_id: str):
     return regenerate_persona_avatar(project_id, persona_id)
 
 
+def _extra_feedback_filters(body: dict) -> dict:
+    """The shared-model filter dimensions from a JSON body, as a stored map.
+
+    The persona/research bodies carry source/category/sentiment as their own
+    flat lists (which drive the DynamoDB query); this picks up the ADDITIONAL
+    dimensions the shared panel adds — subcategory, urgent, enrichment fields,
+    and custom_fields. FeedbackFilters.from_mapping reads a JSON body directly
+    (custom_fields as a nested {key: [values]} map), so no multi-value query
+    view is needed here. Returns to_dict() — only active dimensions, re-parsable
+    by get_feedback_context — or {} when nothing extra was selected.
+
+    Raises ValidationError (a 400) on values that break the shared-model bounds,
+    the same contract the read endpoints enforce.
+    """
+    return FeedbackFilters.from_mapping(body).to_dict()
+
+
 @app.post("/projects/<project_id>/personas/generate")
 @tracer.capture_method
 def api_generate_personas(project_id: str):
@@ -244,6 +262,12 @@ def api_generate_personas(project_id: str):
         'sources': body.get('sources', []),
         'categories': body.get('categories', []),
         'sentiments': body.get('sentiments', []),
+        # The richer shared-model dimensions (subcategory / urgent / enrichment /
+        # custom_fields). Parsed into FeedbackFilters, persisted as its to_dict()
+        # so only active dimensions are stored and get_feedback_context applies
+        # them as a post-pass. Absent/empty is a no-op, so the source/category/
+        # sentiment/days fields above still drive the DynamoDB query unchanged.
+        'feedback_filters': _extra_feedback_filters(body),
         'days': validate_days(body.get('days'), default=30),
         'date_basis': validate_date_basis(body.get('date_basis')),
         'persona_count': validate_persona_count(body.get('persona_count')),
@@ -297,6 +321,9 @@ def api_run_research(project_id: str):
         'sources': body.get('sources', []),
         'categories': body.get('categories', []),
         'sentiments': body.get('sentiments', []),
+        # See api_generate_personas: the richer dimensions, persisted as the
+        # shared model's to_dict() and applied downstream by get_feedback_context.
+        'feedback_filters': _extra_feedback_filters(body),
         'days': validate_days(body.get('days'), default=30),
         'date_basis': validate_date_basis(body.get('date_basis')),
         'selected_persona_ids': body.get('selected_persona_ids', []),
