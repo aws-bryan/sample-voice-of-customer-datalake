@@ -2,7 +2,7 @@
   "description": "Fingerprint of the no-prefix synth. Regenerate with npx ts-node scripts/generate-baseline.ts ONLY for a change intended to alter the default templates — see the script header.",
   "stacks": {
     "VocApiStack": {
-      "templateSha256": "d9562bd0c0ae70ab4bae6bbb7a663d728f3862ae1a7ff8be3fa9e51df7217652",
+      "templateSha256": "87c8fc10f25dcf318c205b9a02e7b5d6ce336720bb88ed87121a98820ad37bb9",
       "names": {
         "physicalNames": [
           "AWS::ApiGateway::Authorizer Name = voc-cognito-authorizer",
@@ -12,6 +12,7 @@
           "AWS::Lambda::Function FunctionName = voc-chat-api-<AWS::AccountId>-<AWS::Region>",
           "AWS::Lambda::Function FunctionName = voc-chat-stream-<AWS::AccountId>-<AWS::Region>",
           "AWS::Lambda::Function FunctionName = voc-data-explorer-api-<AWS::AccountId>-<AWS::Region>",
+          "AWS::Lambda::Function FunctionName = voc-data-quality-worker-<AWS::AccountId>-<AWS::Region>",
           "AWS::Lambda::Function FunctionName = voc-feedback-form-api-<AWS::AccountId>-<AWS::Region>",
           "AWS::Lambda::Function FunctionName = voc-integrations-api-<AWS::AccountId>-<AWS::Region>",
           "AWS::Lambda::Function FunctionName = voc-job-document-generator-<AWS::AccountId>-<AWS::Region>",
@@ -34,6 +35,7 @@
           "AWS::Logs::LogGroup LogGroupName = /aws/lambda/voc-chat-api-<AWS::AccountId>-<AWS::Region>",
           "AWS::Logs::LogGroup LogGroupName = /aws/lambda/voc-chat-stream-<AWS::AccountId>-<AWS::Region>",
           "AWS::Logs::LogGroup LogGroupName = /aws/lambda/voc-data-explorer-api-<AWS::AccountId>-<AWS::Region>",
+          "AWS::Logs::LogGroup LogGroupName = /aws/lambda/voc-data-quality-worker-<AWS::AccountId>-<AWS::Region>",
           "AWS::Logs::LogGroup LogGroupName = /aws/lambda/voc-feedback-form-api-<AWS::AccountId>-<AWS::Region>",
           "AWS::Logs::LogGroup LogGroupName = /aws/lambda/voc-integrations-api-<AWS::AccountId>-<AWS::Region>",
           "AWS::Logs::LogGroup LogGroupName = /aws/lambda/voc-job-document-generator-<AWS::AccountId>-<AWS::Region>",
@@ -52,6 +54,8 @@
           "AWS::Logs::LogGroup LogGroupName = /aws/lambda/voc-settings-api-<AWS::AccountId>-<AWS::Region>",
           "AWS::Logs::LogGroup LogGroupName = /aws/lambda/voc-users-api-<AWS::AccountId>-<AWS::Region>",
           "AWS::Logs::LogGroup LogGroupName = /aws/stepfunctions/voc-document-workflow-<AWS::AccountId>-<AWS::Region>",
+          "AWS::SQS::Queue QueueName = voc-data-quality-<AWS::AccountId>-<AWS::Region>",
+          "AWS::SQS::Queue QueueName = voc-data-quality-dlq-<AWS::AccountId>-<AWS::Region>",
           "AWS::StepFunctions::StateMachine StateMachineName = voc-document-workflow-<AWS::AccountId>-<AWS::Region>"
         ],
         "exportNames": [],
@@ -70,6 +74,7 @@
           "POWERTOOLS_SERVICE_NAME = voc-ballots-api",
           "POWERTOOLS_SERVICE_NAME = voc-chat-api",
           "POWERTOOLS_SERVICE_NAME = voc-data-explorer-api",
+          "POWERTOOLS_SERVICE_NAME = voc-data-quality-worker",
           "POWERTOOLS_SERVICE_NAME = voc-feedback-form-api",
           "POWERTOOLS_SERVICE_NAME = voc-integrations-api",
           "POWERTOOLS_SERVICE_NAME = voc-job-document-generator",
