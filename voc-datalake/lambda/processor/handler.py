@@ -23,6 +23,11 @@ from shared.logging import logger, tracer, metrics
 from shared.aws import get_dynamodb_resource
 from shared.converse import converse, BedrockThrottlingError
 from shared.model_config import get_active_model_id
+from shared.enrichment_fields import (
+    extract_enrichment_values,
+    prompt_guides,
+    prompt_schema_fragment,
+)
 from shared.idempotency import (
     get_persistence_layer,
     get_idempotency_config,
@@ -54,7 +59,10 @@ PRIMARY_LANGUAGE = os.environ.get('PRIMARY_LANGUAGE', 'en')
 # picker ('enrichment' surface) so admins can override it; the default and
 # allowlist live in shared.model_config (get_active_model_id never raises and
 # always returns a usable ID, so no local fallback is needed here).
-PROMPT_VERSION = '1.0.0'
+# 1.1.0: registry enrichment fields (shared/enrichment_fields.py — `usefulness`)
+# joined the JSON structure. Rows stamped 1.0.0 predate them and read as unscored
+# until the Data Quality "calculate missing" job fills them in.
+PROMPT_VERSION = '1.1.0'
 
 # Logs configuration - max entries to keep per source
 MAX_LOG_ENTRIES = 100
@@ -178,7 +186,12 @@ Text: {original_text}
 {categories_instruction}
 
 Return ONLY this JSON structure:
-{{"category":"<one of the categories above>","subcategory":"string or null","journey_stage":"awareness|consideration|purchase|delivery|usage|support|retention|advocacy|unknown","sentiment_label":"positive|neutral|negative|mixed","sentiment_score":-1.0 to 1.0,"urgency":"low|medium|high","impact_area":"product|operations|cx|tech|pricing|brand|legal|other","problem_summary":"string or null","problem_root_cause_hypothesis":"string or null","direct_customer_quote":"string or null","persona":{{"name":"string or null","type":"existing_customer|prospect|churn_risk|advocate|unknown|null","attributes":{{"inferred_segment":"string or null","confidence":"low|medium|high"}}}}}}"""
+{{"category":"<one of the categories above>","subcategory":"string or null","journey_stage":"awareness|consideration|purchase|delivery|usage|support|retention|advocacy|unknown","sentiment_label":"positive|neutral|negative|mixed","sentiment_score":-1.0 to 1.0,"urgency":"low|medium|high","impact_area":"product|operations|cx|tech|pricing|brand|legal|other",""" + prompt_schema_fragment() + ""","problem_summary":"string or null","problem_root_cause_hypothesis":"string or null","direct_customer_quote":"string or null","persona":{{"name":"string or null","type":"existing_customer|prospect|churn_risk|advocate|unknown|null","attributes":{{"inferred_segment":"string or null","confidence":"low|medium|high"}}}}}}
+
+""" + prompt_guides().replace('{', '{{').replace('}', '}}')
+# ^ The registry fragment and guides are spliced in rather than written inline so a
+# new enrichment field is one registry entry (shared/enrichment_fields.py). Braces in
+# a guide are escaped because this template goes through str.format().
 
 # Cache for categories config
 _categories_cache = None
@@ -627,7 +640,12 @@ def process_feedback(raw_record: dict, idempotency_key: str = None) -> dict:
         'custom_fields': _build_custom_fields(raw_record.get('metadata')),
 
         # TTL: 1 year
-        'ttl': int((now.timestamp()) + 365 * 24 * 60 * 60)
+        'ttl': int((now.timestamp()) + 365 * 24 * 60 * 60),
+
+        # Registry enrichment fields (e.g. `usefulness`), validated against their
+        # declared values. A field the model omitted or answered outside its enum
+        # is absent here rather than defaulted, so the item reads as unscored.
+        **extract_enrichment_values(insights),
     }
     
     # Remove None values
