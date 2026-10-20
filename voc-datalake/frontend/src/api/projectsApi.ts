@@ -2,8 +2,12 @@
 // Uses shared fetchApi from client.ts for consistent 401 retry + token refresh
 import { fetchApi } from './client'
 import { getDateBasisBodyParams } from './baseUrl'
+import { normalizePersonaFeedbackPreview, normalizePersonaSourceFeedback } from './personaFeedbackSchema'
 import { normalizeProjectDetail } from './projectDetailSchema'
 import type { FilterParamValue } from './feedbackFilters'
+import type {
+  PersonaFeedbackPreview, PersonaFeedbackScope, PersonaSourceFeedbackPage,
+} from './personaFeedbackSchema'
 import type {
   Project, ProjectDetail, ProjectPersona, ProjectDocument, ProjectJob,
   ProductContext, ProductDoc, ProductInterviewTurnResponse,
@@ -26,16 +30,35 @@ import type {
  */
 type FilterBody = Readonly<Record<string, FilterParamValue>>
 
-interface PersonaGenerateBody {
+/**
+ * Which feedback a persona request draws from. Generation and the wizard's live
+ * preview count both send exactly this, through `mergeFilterBody`, and the
+ * backend parses both with one `_persona_feedback_scope` — so the number the
+ * wizard shows and the set generation samples cannot be read two ways.
+ */
+export interface PersonaPreviewBody {
   sources?: string[]
   categories?: string[]
   sentiments?: string[]
-  persona_count?: number
-  custom_instructions?: string
   days?: number
-  response_language?: string
   extraFilters?: FilterBody
 }
+
+interface PersonaGenerateBody extends PersonaPreviewBody {
+  persona_count?: number
+  custom_instructions?: string
+  response_language?: string
+}
+
+/** One page of a persona's source feedback. The route caps `limit` at 50. */
+interface PersonaSourceFeedbackQuery {
+  scope: PersonaFeedbackScope
+  offset: number
+  limit: number
+}
+
+const personaPath = (projectId: string, personaId: string) =>
+  `/projects/${encodeURIComponent(projectId)}/personas/${encodeURIComponent(personaId)}`
 
 interface ResearchBody {
   question: string
@@ -111,6 +134,27 @@ export const projectsApi = {
       method: 'POST',
       body: JSON.stringify(mergeFilterBody(getDateBasisBodyParams(), filters)),
     }),
+
+  // How many reviews a generation with this scope would match, and how many of
+  // them it would sample. Built exactly like generatePersonas' body (above).
+  previewPersonaFeedback: async (projectId: string, body: PersonaPreviewBody): Promise<PersonaFeedbackPreview> => {
+    const raw = await fetchApi<unknown>(`/projects/${encodeURIComponent(projectId)}/personas/preview-feedback`, {
+      method: 'POST',
+      body: JSON.stringify(mergeFilterBody(getDateBasisBodyParams(), body)),
+    })
+    return normalizePersonaFeedbackPreview(raw)
+  },
+
+  // The reviews a persona was generated from. A page can hold fewer than `limit`
+  // items (deleted feedback is counted in `missing` instead), so the next page
+  // starts at `offset + limit`, never `offset + items.length`.
+  getPersonaSourceFeedback: async (
+    projectId: string, personaId: string, { scope, offset, limit }: PersonaSourceFeedbackQuery,
+  ): Promise<PersonaSourceFeedbackPage> => {
+    const params = new URLSearchParams({ scope, offset: String(offset), limit: String(limit) })
+    const raw = await fetchApi<unknown>(`${personaPath(projectId, personaId)}/feedback?${params.toString()}`)
+    return normalizePersonaSourceFeedback(raw)
+  },
 
   createPersona: (projectId: string, persona: Omit<ProjectPersona, 'persona_id' | 'created_at'>) =>
     fetchApi<{

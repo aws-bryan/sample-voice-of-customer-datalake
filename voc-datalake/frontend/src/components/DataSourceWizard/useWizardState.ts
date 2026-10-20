@@ -107,7 +107,10 @@ export function useWizardState({
 
   const categories = useMemo(() => {
     if (categoriesData?.categories && categoriesData.categories.length > 0) {
-      return categoriesData.categories.map(c => ({ id: c.id, name: c.name }))
+      // The selection value is the category NAME: feedback stores the name (its
+      // `category` attribute and gsi2pk `CATEGORY#{name}`), while admin-added
+      // categories get ids like `cat_<uuid>`, so filtering on the id matched nothing.
+      return categoriesData.categories.map(c => ({ id: c.name, name: c.name }))
     }
     return CATEGORIES.map(c => ({ 
       id: c, 

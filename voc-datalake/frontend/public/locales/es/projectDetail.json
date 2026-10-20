@@ -370,6 +370,8 @@
     "addNote": "Agregar nota",
     "addResearchNotes": "Agregar tus notas de investigación",
     "addResearchNotesDesc": "Documenta tus observaciones, insights e hipótesis sobre esta persona",
+    "citedReviews_one": "{{count}} reseña citada",
+    "citedReviews_other": "{{count}} reseñas citadas",
     "collapse": "Contraer",
     "confidence": "{{level}} de confianza",
     "expand": "Expandir",
@@ -387,7 +389,28 @@
     "removeNote": "Eliminar nota",
     "researchNotes": "Notas de Investigación",
     "reviews": "{{count}} reseñas",
-    "selectToView": "Selecciona una persona para ver detalles"
+    "selectToView": "Selecciona una persona para ver detalles",
+    "sourceFeedback": {
+      "close": "Cerrar",
+      "emptyCited": "El modelo no citó reseñas concretas para esta persona.",
+      "emptyUsed": "No se registraron reseñas en la generación de esta persona.",
+      "error": "No se pudieron cargar los comentarios de origen.",
+      "legacy": "Esta persona se generó antes de que se registraran las fuentes. Vuelve a generar las personas para ver los comentarios en los que se basan.",
+      "loadMore": "Cargar más",
+      "loadMoreError": "No se pudieron cargar más reseñas.",
+      "loading": "Cargando comentarios…",
+      "missing_one": "{{count}} reseña se eliminó desde que se generó esta persona.",
+      "missing_other": "{{count}} reseñas se eliminaron desde que se generó esta persona.",
+      "provenanceAll_one": "Creada a partir de la única reseña coincidente",
+      "provenanceAll_other": "Creada a partir de las {{count}} reseñas coincidentes",
+      "provenanceSampled": "Creada a partir de una muestra uniforme de {{used}} de {{matched}} reseñas coincidentes",
+      "provenanceSampledAtLeast": "Creada a partir de una muestra uniforme de {{used}} de {{matched}}+ reseñas coincidentes",
+      "retry": "Reintentar",
+      "tabCited": "Citadas por esta persona",
+      "tabUsed": "Todas las reseñas usadas",
+      "tabsLabel": "Comentarios que se muestran",
+      "title": "Comentarios de origen de @{{name}}"
+    }
   },
   "personaSections": {
     "behaviorsHabits": "Comportamientos y Hábitos",

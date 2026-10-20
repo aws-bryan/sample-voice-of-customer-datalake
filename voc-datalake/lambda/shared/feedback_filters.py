@@ -266,6 +266,26 @@ class FeedbackFilters:
                 return False
         return item_matches_custom_fields(item, self.custom_field_map)
 
+    def attribute_paths(self) -> tuple[tuple[str, ...], ...]:
+        """The item attribute paths `matches` reads for the ACTIVE dimensions.
+
+        For projections: a read that keeps only these gets the same `matches`
+        answer as one that keeps everything. A custom field is the nested path
+        `('custom_fields', key)`, so a read keeps that one key rather than the
+        whole map. Lives beside `matches` so the two cannot disagree about what
+        is read.
+        """
+        paths: list[tuple[str, ...]] = [
+            (attribute,)
+            for (_, attribute), allowed in zip(_LIST_DIMENSIONS, self._list_values())
+            if allowed
+        ]
+        if self.urgent_only:
+            paths.append(('urgency',))
+        paths.extend((name,) for name, values in self.enrichment if values)
+        paths.extend(('custom_fields', key) for key, _ in self.custom_fields)
+        return tuple(paths)
+
     def without_sources(self) -> FeedbackFilters:
         """The same filters minus the source list — for callers that pushed it down."""
         return FeedbackFilters(

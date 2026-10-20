@@ -367,6 +367,8 @@
     "addNote": "Add Note",
     "addResearchNotes": "Add Your Research Notes",
     "addResearchNotesDesc": "Document your observations, insights, and hypotheses about this persona",
+    "citedReviews_one": "{{count}} cited review",
+    "citedReviews_other": "{{count}} cited reviews",
     "collapse": "Collapse",
     "confidence": "{{level}} confidence",
     "expand": "Expand",
@@ -383,7 +385,28 @@
     "removeNote": "Remove note",
     "researchNotes": "Research Notes",
     "reviews": "{{count}} reviews",
-    "selectToView": "Select a persona to view details"
+    "selectToView": "Select a persona to view details",
+    "sourceFeedback": {
+      "close": "Close",
+      "emptyCited": "The model didn't cite specific reviews for this persona.",
+      "emptyUsed": "No reviews were recorded for this persona's generation.",
+      "error": "Couldn't load the source feedback.",
+      "legacy": "This persona was generated before source tracking was added. Regenerate personas to see the feedback behind them.",
+      "loadMore": "Load more",
+      "loadMoreError": "Couldn't load more reviews.",
+      "loading": "Loading feedback…",
+      "missing_one": "{{count}} review was deleted since this persona was generated.",
+      "missing_other": "{{count}} reviews were deleted since this persona was generated.",
+      "provenanceAll_one": "Built from the one matching review",
+      "provenanceAll_other": "Built from all {{count}} matching reviews",
+      "provenanceSampled": "Built from an even sample of {{used}} of {{matched}} matching reviews",
+      "provenanceSampledAtLeast": "Built from an even sample of {{used}} of {{matched}}+ matching reviews",
+      "retry": "Retry",
+      "tabCited": "Cited by this persona",
+      "tabUsed": "All reviews used",
+      "tabsLabel": "Which feedback to show",
+      "title": "Source feedback for @{{name}}"
+    }
   },
   "personaSections": {
     "behaviorsHabits": "Behaviors & Habits",

@@ -370,6 +370,8 @@
     "addNote": "Ajouter une note",
     "addResearchNotes": "Ajouter vos notes de recherche",
     "addResearchNotesDesc": "Documentez vos observations, insights et hypothèses concernant ce persona",
+    "citedReviews_one": "{{count}} avis cité",
+    "citedReviews_other": "{{count}} avis cités",
     "collapse": "Réduire",
     "confidence": "{{level}} de confiance",
     "expand": "Développer",
@@ -387,7 +389,28 @@
     "removeNote": "Supprimer la note",
     "researchNotes": "Notes de recherche",
     "reviews": "{{count}} avis",
-    "selectToView": "Sélectionnez un persona pour voir les détails"
+    "selectToView": "Sélectionnez un persona pour voir les détails",
+    "sourceFeedback": {
+      "close": "Fermer",
+      "emptyCited": "Le modèle n’a cité aucun avis précis pour ce persona.",
+      "emptyUsed": "Aucun avis n’a été enregistré pour la génération de ce persona.",
+      "error": "Impossible de charger les avis sources.",
+      "legacy": "Ce persona a été généré avant l’enregistrement des sources. Régénérez les personas pour voir les avis sur lesquels ils reposent.",
+      "loadMore": "Charger plus",
+      "loadMoreError": "Impossible de charger plus d’avis.",
+      "loading": "Chargement des avis…",
+      "missing_one": "{{count}} avis a été supprimé depuis la génération de ce persona.",
+      "missing_other": "{{count}} avis ont été supprimés depuis la génération de ce persona.",
+      "provenanceAll_one": "Construit à partir du seul avis correspondant",
+      "provenanceAll_other": "Construit à partir des {{count}} avis correspondants",
+      "provenanceSampled": "Construit à partir d’un échantillon régulier de {{used}} des {{matched}} avis correspondants",
+      "provenanceSampledAtLeast": "Construit à partir d’un échantillon régulier de {{used}} des {{matched}}+ avis correspondants",
+      "retry": "Réessayer",
+      "tabCited": "Cités par ce persona",
+      "tabUsed": "Tous les avis utilisés",
+      "tabsLabel": "Avis affichés",
+      "title": "Avis sources de @{{name}}"
+    }
   },
   "personaSections": {
     "behaviorsHabits": "Comportements et habitudes",

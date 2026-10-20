@@ -178,6 +178,27 @@ class TestDerived:
         assert FeedbackFilters.from_mapping(as_dict) == f
         assert FeedbackFilters().to_dict() == {}
 
+    def test_attribute_paths_name_exactly_what_matches_reads(self):
+        f = FeedbackFilters.from_mapping({
+            'source': 'a', 'subcategory': 's', 'urgent': 'true',
+            'usefulness': 'high', 'cf_region': 'EMEA', 'cf_tier': 'Gold',
+        })
+        assert set(f.attribute_paths()) == {
+            ('source_platform',), ('subcategory',), ('urgency',), ('usefulness',),
+            ('custom_fields', 'region'), ('custom_fields', 'tier'),
+        }
+        assert FeedbackFilters().attribute_paths() == ()
+
+    def test_a_row_projected_to_attribute_paths_matches_like_the_full_row(self):
+        """The contract the persona pool's projection relies on."""
+        f = FeedbackFilters.from_mapping({'urgent': 'true', 'cf_tier': 'Gold'})
+        full = {
+            'urgency': 'high', 'original_text': 'long text',
+            'custom_fields': {'tier': 'Gold', 'region': 'EMEA'},
+        }
+        projected = {'urgency': 'high', 'custom_fields': {'tier': 'Gold'}}
+        assert f.matches(full) is f.matches(projected) is True
+
 
 class TestCustomFieldHelpers:
     def test_parse_ignores_empty_values_and_bare_prefix(self):

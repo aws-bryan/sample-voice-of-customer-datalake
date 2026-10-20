@@ -421,6 +421,25 @@ export interface ProjectPersona {
   // Metadata
   supporting_evidence?: string[]
   source_breakdown?: Record<string, number>
+  // Source tracking. All three are absent on personas generated before it was
+  // recorded; `feedback_count` above is the model's own estimate, not a count.
+  /** The reviews this persona's evidence cites. */
+  evidence_feedback_ids?: string[]
+  /** Every review the persona's generation batch read. */
+  input_feedback_ids?: string[]
+  feedback_provenance?: PersonaFeedbackProvenance
+}
+
+/** How the feedback a persona was generated from was drawn from the matching set. */
+export interface PersonaFeedbackProvenance {
+  /** Reviews the generation batch actually read. */
+  items_used: number
+  /** Reviews that matched the request's filters. */
+  items_matched: number
+  /** The match count stopped at a row cap, so `items_matched` means "at least". */
+  matched_is_lower_bound: boolean
+  /** The even-sample size generation draws from the matching set. */
+  sample_limit: number
 }
 
 // 🔑 The ONE declaration of what POST /projects/{id}/document accepts in

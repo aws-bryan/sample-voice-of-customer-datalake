@@ -2,7 +2,7 @@
 Tests for shared/feedback.py - Feedback utilities for LLM context building.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestGetFeedbackContext:
@@ -220,6 +220,217 @@ class TestGetFeedbackContextExtraFilters:
 
         assert len(result) == 3
         assert all(i['urgency'] == 'high' for i in result)
+
+
+def _first_partition_table(items):
+    """A table whose first partition query yields ``items`` and every later
+    one nothing — how a bulk import looks: everything on one date."""
+    table = MagicMock()
+    calls = {'n': 0}
+
+    def query(**kwargs):
+        calls['n'] += 1
+        return {'Items': list(items)} if calls['n'] == 1 else {'Items': []}
+
+    table.query.side_effect = query
+    return table
+
+
+class TestProjection:
+    def test_aliases_every_segment_and_reuses_an_alias_per_name(self):
+        from shared.feedback import _projection
+        expression, names = _projection([('date',), ('custom_fields', 'tier'), ('custom_fields', 'region')])
+
+        assert expression == '#p0, #p1.#p2, #p1.#p3'
+        assert names == {'#p0': 'date', '#p1': 'custom_fields', '#p2': 'tier', '#p3': 'region'}
+
+    def test_admin_chosen_keys_never_appear_inline(self):
+        """A custom-field key is free text ("Las Vegas, NV.region"), so it may
+        contain characters an expression would read as syntax."""
+        from shared.feedback import _projection
+        expression, names = _projection([('custom_fields', 'odd.key, #x')])
+
+        assert 'odd' not in expression
+        assert 'odd.key, #x' in names.values()
+
+    def test_repeated_paths_are_projected_once(self):
+        from shared.feedback import _projection
+        expression, _ = _projection([('feedback_id',), ('feedback_id',)])
+        assert expression == '#p0'
+
+
+class TestSampleEvenly:
+    def test_returns_everything_when_the_pool_fits(self):
+        from shared.feedback import sample_evenly
+        rows = [{'i': i} for i in range(5)]
+        assert sample_evenly(rows, 10) == rows
+
+    def test_spreads_the_sample_across_the_whole_pool(self):
+        """Not the first N: the newest-first read order is what collapsed a
+        bulk import onto one slice."""
+        from shared.feedback import sample_evenly
+        rows = [{'i': i} for i in range(100)]
+        picked = [r['i'] for r in sample_evenly(rows, 4)]
+        assert picked == [0, 25, 50, 75]
+
+    def test_picks_distinct_rows_in_pool_order(self):
+        from shared.feedback import sample_evenly
+        rows = [{'i': i} for i in range(7)]
+        picked = [r['i'] for r in sample_evenly(rows, 6)]
+        assert picked == sorted(set(picked))
+        assert len(picked) == 6
+
+    def test_is_deterministic(self):
+        from shared.feedback import sample_evenly
+        rows = [{'i': i} for i in range(1000)]
+        assert sample_evenly(rows, 145) == sample_evenly(rows, 145)
+
+    def test_returns_nothing_for_a_non_positive_size(self):
+        from shared.feedback import sample_evenly
+        assert sample_evenly([{'i': 1}], 0) == []
+
+
+class TestReadFeedbackPool:
+    def test_an_unfiltered_read_keeps_only_the_id(self):
+        """Deserialization is what times the preview out, so an unfiltered
+        count must not carry anything it does not need."""
+        from shared.feedback import read_feedback_pool
+        table = _first_partition_table([{'feedback_id': 'a'}])
+
+        read_feedback_pool(table, {'days': 7})
+
+        kwargs = table.query.call_args_list[0].kwargs
+        assert set(kwargs['ExpressionAttributeNames'].values()) == {'feedback_id'}
+
+    def test_a_filtered_read_keeps_exactly_what_the_filters_read(self):
+        from shared.feedback import read_feedback_pool
+        table = _first_partition_table([])
+
+        read_feedback_pool(table, {
+            'days': 7,
+            'sentiments': ['negative'],
+            'date_basis': 'review',
+            'feedback_filters': {'urgent': True, 'custom_fields': {'tier_status': ['Gold']}},
+        })
+
+        kwargs = table.query.call_args_list[0].kwargs
+        names = kwargs['ExpressionAttributeNames']
+        alias = {name: key for key, name in names.items()}
+        assert set(names.values()) == {
+            'feedback_id', 'date', 'source_created_at', 'sentiment_label',
+            'urgency', 'custom_fields', 'tier_status',
+        }
+        # The custom field is a nested path, so only that key of the map comes back.
+        assert f"{alias['custom_fields']}.{alias['tier_status']}" in kwargs['ProjectionExpression']
+        assert 'original_text' not in names.values()
+
+    def test_counts_every_match_not_just_a_fetch_limit(self):
+        from shared.feedback import read_feedback_pool
+        table = _first_partition_table([{'feedback_id': str(i)} for i in range(500)])
+
+        rows, capped = read_feedback_pool(table, {'days': 7})
+
+        assert len(rows) == 500
+        assert capped is False
+
+    def test_flags_the_count_as_a_lower_bound_at_the_row_cap(self):
+        from shared.feedback import read_feedback_pool
+        table = _first_partition_table([{'feedback_id': str(i)} for i in range(10)])
+
+        rows, capped = read_feedback_pool(table, {'days': 7}, max_rows=4)
+
+        assert len(rows) == 4
+        assert capped is True
+
+    def test_applies_the_list_and_shared_model_filters(self):
+        from shared.feedback import read_feedback_pool
+        table = _first_partition_table([
+            {'feedback_id': 'a', 'sentiment_label': 'negative', 'custom_fields': {'tier': 'Gold'}},
+            {'feedback_id': 'b', 'sentiment_label': 'positive', 'custom_fields': {'tier': 'Gold'}},
+            {'feedback_id': 'c', 'sentiment_label': 'negative', 'custom_fields': {'tier': 'Silver'}},
+        ])
+
+        rows, _ = read_feedback_pool(table, {
+            'days': 7,
+            'sentiments': ['negative'],
+            'feedback_filters': {'custom_fields': {'tier': ['Gold']}},
+        })
+
+        assert [r['feedback_id'] for r in rows] == ['a']
+
+    def test_returns_nothing_without_a_table(self):
+        from shared.feedback import read_feedback_pool
+        assert read_feedback_pool(None, {'days': 7}) == ([], False)
+
+    def test_a_passed_deadline_stops_at_a_page_boundary_and_reports_a_lower_bound(self):
+        """One import date is one index partition; a throttled read of it must
+        still answer inside the preview's request timeout."""
+        from shared.feedback import read_feedback_pool
+        table = MagicMock()
+        table.query.return_value = {
+            'Items': [{'feedback_id': 'a'}, {'feedback_id': 'b'}],
+            'LastEvaluatedKey': {'k': 'more'},
+        }
+
+        rows, capped = read_feedback_pool(table, {'days': 30}, deadline=0)
+
+        assert table.query.call_count == 1
+        assert [r['feedback_id'] for r in rows] == ['a', 'b']
+        assert capped is True
+
+    def test_without_a_deadline_a_long_partition_is_read_to_the_end(self):
+        from shared.feedback import read_feedback_pool
+        table = MagicMock()
+        table.query.side_effect = [
+            {'Items': [{'feedback_id': 'a'}], 'LastEvaluatedKey': {'k': 1}},
+            {'Items': [{'feedback_id': 'b'}]},
+        ] + [{'Items': []} for _ in range(29)]
+
+        rows, capped = read_feedback_pool(table, {'days': 30})
+
+        assert [r['feedback_id'] for r in rows] == ['a', 'b']
+        assert capped is False
+
+
+class TestGetFeedbackByIds:
+    def test_returns_items_in_the_requested_order_and_reports_missing(self):
+        from shared.feedback import get_feedback_by_ids
+        table = MagicMock()
+        # One response per id, in request order: 'b' has been deleted.
+        table.query.side_effect = [
+            {'Items': [{'feedback_id': 'c'}]},
+            {'Items': []},
+            {'Items': [{'feedback_id': 'a'}]},
+        ]
+
+        items, missing = get_feedback_by_ids(table, ['c', 'b', 'a'])
+
+        assert [i['feedback_id'] for i in items] == ['c', 'a']
+        assert missing == ['b']
+        assert table.query.call_args.kwargs['IndexName'] == 'gsi4-by-feedback-id'
+
+    def test_skips_empty_and_non_string_ids_without_querying(self):
+        from shared.feedback import get_feedback_by_ids
+        table = MagicMock()
+
+        assert get_feedback_by_ids(table, ['', None]) == ([], [])
+        table.query.assert_not_called()
+
+
+class TestSampleFeedback:
+    def test_samples_the_pool_evenly_and_fetches_the_picks_in_full(self):
+        from shared import feedback
+        pool = [{'feedback_id': str(i)} for i in range(10)]
+        full = {str(i): {'feedback_id': str(i), 'original_text': f't{i}'} for i in range(10)}
+
+        with patch.object(feedback, 'read_feedback_pool', return_value=(pool, False)), \
+             patch.object(feedback, 'get_feedback_by_ids',
+                          side_effect=lambda _t, ids: ([full[i] for i in ids], [])):
+            items, matched, lower_bound = feedback.sample_feedback(MagicMock(), {}, 5)
+
+        assert [i['feedback_id'] for i in items] == ['0', '2', '4', '6', '8']
+        assert all('original_text' in i for i in items)
+        assert (matched, lower_bound) == (10, False)
 
 
 class TestFormatFeedbackForLlm:

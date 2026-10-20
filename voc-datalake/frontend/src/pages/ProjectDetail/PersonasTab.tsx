@@ -12,6 +12,7 @@ import type { NoteItem } from './types'
 import type { ProjectPersona } from '../../api/types'
 
 interface PersonasTabProps {
+  readonly projectId: string
   readonly personas: ProjectPersona[]
   readonly selectedPersona: ProjectPersona | null
   readonly onSelectPersona: (persona: ProjectPersona) => void
@@ -25,6 +26,7 @@ interface PersonasTabProps {
 }
 
 export default function PersonasTab({
+  projectId,
   personas,
   selectedPersona,
   onSelectPersona,
@@ -87,6 +89,7 @@ export default function PersonasTab({
           <div className="lg:col-span-2 bg-white rounded-xl border overflow-hidden">
             {selectedPersona ? (
               <PersonaDetailView
+                projectId={projectId}
                 persona={selectedPersona}
                 onEdit={onEditPersona}
                 onDelete={onDeletePersona}

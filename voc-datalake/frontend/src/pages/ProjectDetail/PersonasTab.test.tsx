@@ -12,6 +12,7 @@ const mockPersona: ProjectPersona = {
 }
 
 const defaultProps = {
+  projectId: 'proj-1',
   personas: [] as ProjectPersona[],
   selectedPersona: null,
   onSelectPersona: vi.fn(),

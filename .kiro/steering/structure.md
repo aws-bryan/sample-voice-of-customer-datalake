@@ -339,7 +339,9 @@ embeddable widget calls from the customer's own site.
 | GET | `/projects/{id}` | Get project with personas/documents |
 | PUT | `/projects/{id}` | Update project |
 | DELETE | `/projects/{id}` | Delete project |
-| POST | `/projects/{id}/personas/generate` | Generate personas from feedback |
+| POST | `/projects/{id}/personas/generate` | Generate personas from an even sample of the matching feedback |
+| POST | `/projects/{id}/personas/preview-feedback` | Count matching feedback + persona sample size (wizard live count) |
+| GET | `/projects/{id}/personas/{persona_id}/feedback` | Feedback a persona came from (`?scope=cited\|used&offset&limit`) |
 | POST | `/projects/{id}/research` | Run research job (Step Functions) |
 | POST | `/projects/{id}/chat` | Project-scoped chat |
 

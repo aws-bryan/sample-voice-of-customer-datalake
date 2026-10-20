@@ -84,7 +84,9 @@ def projects_table():
 
 @pytest.fixture
 def feedback():
-    with patch('api.projects.get_feedback_context', return_value=FEEDBACK_ITEMS):
+    # (sampled items, matched count, matched is a lower bound)
+    with patch('api.projects.sample_persona_feedback',
+               return_value=(FEEDBACK_ITEMS, len(FEEDBACK_ITEMS), False)):
         yield FEEDBACK_ITEMS
 
 
@@ -253,6 +255,25 @@ class TestReplaceSemantics:
         assert item['source_breakdown'] == {'app_store': len(FEEDBACK_ITEMS)}
         assert item['source_feedback_ids'] == [f['feedback_id'] for f in FEEDBACK_ITEMS]
         assert set(item['llm_metadata']) == {'model', 'prompt_version', 'generation_time_ms'}
+
+    def test_saved_persona_records_the_feedback_it_came_from(
+        self, projects_table, feedback, chain, avatars
+    ):
+        """'Review #1' is resolved to the id at position 1 while that list still
+        exists, and the batch's whole input is kept beside it."""
+        from api.projects import generate_personas, persona_context_budget
+
+        generate_personas('proj-1', {'persona_count': 2})
+
+        item = _saved_items(projects_table)[0]
+        assert item['evidence_feedback_ids'] == [FEEDBACK_ITEMS[0]['feedback_id']]
+        assert item['input_feedback_ids'] == [f['feedback_id'] for f in FEEDBACK_ITEMS]
+        assert item['feedback_provenance'] == {
+            'items_used': len(FEEDBACK_ITEMS),
+            'items_matched': len(FEEDBACK_ITEMS),
+            'matched_is_lower_bound': False,
+            'sample_limit': persona_context_budget()[1],
+        }
 
 
 class TestAvatarConcurrency:

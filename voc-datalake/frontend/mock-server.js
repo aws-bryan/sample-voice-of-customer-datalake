@@ -783,8 +783,16 @@ const mockProjectDetails = {
         goals: ['Get orders delivered before the promised date', 'Track packages without contacting support'],
         frustrations: ['Late deliveries with no proactive updates', 'Support wait times'],
         quote: 'If the app just told me the truth about delivery dates, I would stop refreshing it every hour.',
+        // Source tracking (persona source feedback). The batch read every match,
+        // and one of the reviews it read has since been deleted, so the "All
+        // reviews used" tab shows the deleted-since note.
+        evidence_feedback_ids: ['1', '3'],
+        input_feedback_ids: ['1', '2', '3', 'deleted_review_1'],
+        feedback_provenance: { items_used: 4, items_matched: 4, matched_is_lower_bound: false, sample_limit: 145 },
       },
       {
+        // Deliberately legacy: generated before source tracking, so it carries
+        // none of the three fields and its source-feedback view says so.
         persona_id: 'persona_2',
         name: 'Value-Hunter Victor',
         tagline: 'Compares every price twice',
@@ -829,6 +837,12 @@ const mockProjectDetails = {
         goals: ['Reorder in under 30 seconds'],
         frustrations: ['App logs her out weekly', 'Checkout buttons below the fold'],
         quote: 'Every extra tap is a reason to use the website of your competitor.',
+        // Source tracking for a SAMPLED batch: 145 of 612 matches, so the view
+        // shows the even-sample wording and "All reviews used" pages (25 a page).
+        // The `sample_<n>` ids resolve to synthetic rows; see resolveMockFeedback.
+        evidence_feedback_ids: ['sample_3', 'sample_17', 'sample_42', 'sample_88', 'sample_120'],
+        input_feedback_ids: Array.from({ length: 145 }, (_, n) => `sample_${n}`),
+        feedback_provenance: { items_used: 145, items_matched: 612, matched_is_lower_bound: false, sample_limit: 145 },
       },
     ],
     documents: [
@@ -844,6 +858,85 @@ const mockProjectDetails = {
     ],
   },
 };
+
+// ── Persona source feedback ────────────────────────────────────────────────
+// Mirrors get_persona_source_feedback / preview_persona_feedback in
+// lambda/api/projects.py: GET .../personas/{id}/feedback?scope&offset&limit
+// and POST .../personas/preview-feedback.
+
+const PERSONA_FEEDBACK_SCOPES = { cited: 'evidence_feedback_ids', used: 'input_feedback_ids' };
+const PERSONA_FEEDBACK_PAGE_MAX = 50;
+const PERSONA_SAMPLE_LIMIT = 145;
+const SAMPLE_FEEDBACK_ID = /^sample_(\d+)$/;
+
+/** A feedback row by id: a real fixture, a synthetic `sample_<n>` row, or
+ *  undefined (deleted since the persona was generated). */
+function resolveMockFeedback(id) {
+  const real = mockFeedback.find(f => f.feedback_id === id);
+  if (real) return real;
+  const sample = SAMPLE_FEEDBACK_ID.exec(id);
+  if (!sample) return undefined;
+  const n = Number(sample[1]);
+  return { ...mockFeedback[n % mockFeedback.length], feedback_id: id, source_created_at: daysAgo(n % 60) };
+}
+
+function clampedInt(raw, fallback, min, max) {
+  const n = Number.parseInt(raw ?? '', 10);
+  return Number.isFinite(n) ? Math.min(Math.max(n, min), max) : fallback;
+}
+
+/** { status, body } for one page of a persona's source feedback. */
+function personaSourceFeedback(projectId, personaId, searchParams) {
+  const persona = mockProjectDetails[projectId]?.personas.find(p => p.persona_id === personaId);
+  if (!persona) return { status: 404, body: { success: false, error: 'Persona not found' } };
+  const scope = searchParams.get('scope') ?? 'cited';
+  if (!Object.hasOwn(PERSONA_FEEDBACK_SCOPES, scope)) {
+    return { status: 400, body: { success: false, error: 'scope must be one of: cited, used' } };
+  }
+  const ids = persona[PERSONA_FEEDBACK_SCOPES[scope]];
+  if (!Array.isArray(ids)) {
+    return { status: 200, body: { available: false, scope, total: 0, offset: 0, items: [], missing: 0, provenance: null } };
+  }
+  const offset = clampedInt(searchParams.get('offset'), 0, 0, 100_000);
+  const limit = clampedInt(searchParams.get('limit'), 25, 1, PERSONA_FEEDBACK_PAGE_MAX);
+  const page = ids.slice(offset, offset + limit);
+  const items = page.map(resolveMockFeedback).filter(Boolean);
+  return {
+    status: 200,
+    body: {
+      available: true, scope, total: ids.length, offset, items,
+      missing: page.length - items.length,
+      provenance: persona.feedback_provenance ?? null,
+    },
+  };
+}
+
+/** A persona request body as the query params the shared filter helpers read.
+ *  The flat lists become source/category/sentiment; the flattened shared-filter
+ *  keys (subcategory, urgent, enrichment fields, cf_<key>) pass through. */
+function personaScopeParams(body) {
+  const params = new URLSearchParams();
+  const lists = [['source', body.sources], ['category', body.categories], ['sentiment', body.sentiments]];
+  for (const [param, values] of lists) {
+    if (Array.isArray(values) && values.length > 0) params.set(param, values.join(','));
+  }
+  params.set('days', String(body.days ?? 30));
+  if (body.date_basis === 'review') params.set('date_basis', 'review');
+  const passThrough = new Set(['subcategory', 'urgent', ...ENRICHMENT_FILTER_FIELDS.map(f => f.name)]);
+  for (const [key, value] of Object.entries(body)) {
+    if (passThrough.has(key)) params.set(key, String(value));
+    else if (key.startsWith('cf_')) for (const v of [].concat(value)) params.append(key, String(v));
+  }
+  return params;
+}
+
+function previewPersonaFeedback(body) {
+  return {
+    matched: filteredWindow(personaScopeParams(body)).length,
+    matched_is_lower_bound: false,
+    sample_limit: PERSONA_SAMPLE_LIMIT,
+  };
+}
 
 // ── Product tab state (issue #179) ─────────────────────────────────────────
 // Stateful per-project product context, docs, and report jobs so the whole
@@ -1169,7 +1262,9 @@ const server = http.createServer((req, res) => {
   // every new /feedback/<name> route.
   if (req.method === 'GET' && url.pathname.startsWith('/feedback/') && !(key in handlers)) {
     const id = url.pathname.split('/')[2];
-    const item = mockFeedback.find(f => f.feedback_id === id);
+    // Includes the synthetic `sample_<n>` rows behind persona_3, so "Open full
+    // details" from its source-feedback view resolves.
+    const item = resolveMockFeedback(id);
     if (item) {
       res.writeHead(200);
       res.end(JSON.stringify(item));
@@ -1221,6 +1316,24 @@ const server = http.createServer((req, res) => {
       res.writeHead(404);
       res.end(JSON.stringify({ error: 'Project not found' }));
     }
+    return;
+  }
+
+  // Persona source feedback: one page of the reviews a persona cites / read.
+  const personaFeedbackMatch = url.pathname.match(/^\/projects\/([^/]+)\/personas\/([^/]+)\/feedback$/);
+  if (req.method === 'GET' && personaFeedbackMatch) {
+    const result = personaSourceFeedback(personaFeedbackMatch[1], personaFeedbackMatch[2], url.searchParams);
+    res.writeHead(result.status);
+    res.end(JSON.stringify(result.body));
+    return;
+  }
+
+  // The persona wizard's live "N reviews match" count.
+  if (req.method === 'POST' && /^\/projects\/[^/]+\/personas\/preview-feedback$/.test(url.pathname)) {
+    collectJson(req, res, (body) => {
+      res.writeHead(200);
+      res.end(JSON.stringify(previewPersonaFeedback(body ?? {})));
+    });
     return;
   }
 

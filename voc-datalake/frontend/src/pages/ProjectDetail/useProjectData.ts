@@ -10,6 +10,7 @@ import { projectsApi } from '../../api/projectsApi'
 import { toFeedbackQueryParams } from '../../api/feedbackFilters'
 import { projectKey } from '../../api/projectQueryKeys'
 import { usePrototypeLinkRefresh } from '../../components/usePrototypeLinkRefresh'
+import { personaFeedbackScope } from './personaFeedbackScope'
 import type {
   PersonaToolConfig, ResearchToolConfig, DocToolConfig, MergeToolConfig, NoteItem,
 } from './types'
@@ -250,17 +251,12 @@ export function useProjectMutations({
 
   const personaMut = useMutation({
     mutationFn: () => projectsApi.generatePersonas(projectId, {
-      sources: contextConfig.sources,
-      categories: contextConfig.categories,
-      sentiments: contextConfig.sentiments,
+      // Shared with the wizard's live preview count, so the number it shows
+      // describes the set this request samples.
+      ...personaFeedbackScope(contextConfig),
       persona_count: personaConfig.personaCount,
       custom_instructions: personaConfig.customInstructions,
-      days: contextConfig.days,
       response_language: i18n.language,
-      // The richer shared-model dimensions (subcategory / urgent / enrichment /
-      // cf_*). The flat sources/categories/sentiments above drive the DynamoDB
-      // query; these narrow it further via the backend post-pass.
-      extraFilters: toFeedbackQueryParams(contextConfig.feedback),
     }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: projectJobsKey(id) })

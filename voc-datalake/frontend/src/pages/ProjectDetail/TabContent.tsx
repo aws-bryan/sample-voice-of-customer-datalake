@@ -105,6 +105,7 @@ export default function TabContent({
   if (activeTab === 'personas') {
     return (
       <PersonasTab
+        projectId={project.project_id}
         personas={personas}
         selectedPersona={selectedPersona}
         onSelectPersona={onSelectPersona}

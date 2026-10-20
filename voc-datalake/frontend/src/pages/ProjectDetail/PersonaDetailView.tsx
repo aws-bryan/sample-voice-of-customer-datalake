@@ -5,11 +5,14 @@ import clsx from 'clsx'
 import {
   Pencil, Trash2, Loader2,
 } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import PersonaExportMenu from '../../components/PersonaExportMenu'
 import PersonaAvatar from './PersonaAvatar'
 import { getConfidenceClass } from './personaHelpers'
 import PersonaSection from './PersonaSection'
+import PersonaSourceFeedbackModal from './PersonaSourceFeedbackModal'
 import {
   IdentitySection,
   GoalsSection,
@@ -24,6 +27,7 @@ import type { NoteItem } from './types'
 import type { ProjectPersona } from '../../api/types'
 
 interface PersonaDetailViewProps {
+  readonly projectId: string
   readonly persona: ProjectPersona
   readonly onEdit: () => void
   readonly onDelete: () => void
@@ -32,7 +36,20 @@ interface PersonaDetailViewProps {
   readonly isSavingNotes: boolean
 }
 
+/**
+ * The header's "• N reviews" suffix. `feedback_count` is the model's own estimate,
+ * so a persona that recorded the reviews it cites shows that real count instead;
+ * a persona generated before that keeps the old text unchanged.
+ */
+function reviewCountSuffix(t: TFunction, persona: ProjectPersona): string {
+  if (Array.isArray(persona.evidence_feedback_ids)) {
+    return ` • ${t('personas.citedReviews', { count: persona.evidence_feedback_ids.length })}`
+  }
+  return persona.feedback_count == null ? '' : ` • ${persona.feedback_count} reviews`
+}
+
 export default function PersonaDetailView({
+  projectId,
   persona,
   onEdit,
   onDelete,
@@ -41,6 +58,7 @@ export default function PersonaDetailView({
   isSavingNotes,
 }: PersonaDetailViewProps) {
   const { t } = useTranslation('projectDetail')
+  const [showSourceFeedback, setShowSourceFeedback] = useState(false)
   return (
     <div className="h-full overflow-y-auto">
       {/* Header with Avatar */}
@@ -53,12 +71,12 @@ export default function PersonaDetailView({
               <p className="text-gray-600 text-sm sm:text-base line-clamp-2">{persona.tagline}</p>
               {persona.confidence == null ? null : <span className={clsx('inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium', getConfidenceClass(persona.confidence))}>
                 {persona.confidence} confidence
-                {persona.feedback_count == null ? '' : ` • ${persona.feedback_count} reviews`}
+                {reviewCountSuffix(t, persona)}
               </span>}
             </div>
           </div>
           <div className="flex items-center gap-1 self-end sm:self-start">
-            <PersonaExportMenu persona={persona} />
+            <PersonaExportMenu persona={persona} onViewSourceFeedback={() => setShowSourceFeedback(true)} />
             <button onClick={onEdit} className="p-2 text-purple-500 hover:bg-purple-100 rounded-lg" title="Edit">
               <Pencil size={18} />
             </button>
@@ -87,6 +105,15 @@ export default function PersonaDetailView({
           />
         </PersonaSection>
       </div>
+
+      {showSourceFeedback ? (
+        <PersonaSourceFeedbackModal
+          key={persona.persona_id}
+          projectId={projectId}
+          persona={persona}
+          onClose={() => setShowSourceFeedback(false)}
+        />
+      ) : null}
     </div>
   )
 }

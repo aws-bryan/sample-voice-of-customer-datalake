@@ -5,6 +5,7 @@ Handles projects, personas, PRDs, PR/FAQs with multi-step LLM orchestration.
 import json
 import os
 import re
+import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -33,12 +34,16 @@ from shared.prompts import (
 )
 from shared.feedback import (
     get_feedback_context as _get_feedback_context,
+    get_feedback_by_ids as _get_feedback_by_ids,
+    read_feedback_pool as _read_feedback_pool,
+    sample_feedback as _sample_feedback,
     feedback_char_budget,
     feedback_item_limit,
     format_feedback_for_llm,
     get_feedback_statistics,
     truncate_feedback_context,
 )
+from shared.persona_evidence import input_feedback_ids, resolve_evidence_ids
 from shared.model_config import surface_context_window_tokens
 from shared.avatar import (
     generate_persona_avatar as _generate_persona_avatar,
@@ -265,6 +270,41 @@ def generate_persona_avatar(persona_data: dict, s3_bucket: str | None = None) ->
 def get_feedback_context(filters: dict, limit: int = 50) -> list[dict]:
     """Get feedback items based on filters for LLM context."""
     return _get_feedback_context(feedback_table, filters, limit)
+
+
+def sample_persona_feedback(filters: dict, sample_size: int) -> tuple[list[dict], int, bool]:
+    """An even sample of the matching feedback: ``(items, matched, is_lower_bound)``.
+
+    See shared/feedback.py::sample_feedback for why persona generation samples
+    instead of taking the newest N.
+    """
+    return _sample_feedback(feedback_table, filters, sample_size)
+
+
+# How long the wizard's preview count may read before answering "at least N".
+# The projects API Lambda times out at 30s and API Gateway at 29s; a full read of
+# the f deployment's 42,612-row corpus measured 4-7s in-region, but one import
+# date is one index partition and DynamoDB can throttle it to far longer.
+PERSONA_PREVIEW_READ_SECONDS = 20
+
+
+def preview_persona_feedback(filters: dict) -> dict:
+    """How much feedback a persona generation with ``filters`` would draw from.
+
+    Reads the same pool generation samples from, so the wizard's number and the
+    job's input describe one set. Unlike generation (a 15-minute job, which
+    reads to the end), it must answer inside a request timeout, so a slow read
+    stops at PERSONA_PREVIEW_READ_SECONDS and reports its count as a lower bound.
+    """
+    pool, capped = _read_feedback_pool(
+        feedback_table, filters, deadline=time.monotonic() + PERSONA_PREVIEW_READ_SECONDS,
+    )
+    _, sample_limit = persona_context_budget()
+    return {
+        'matched': len(pool),
+        'matched_is_lower_bound': capped,
+        'sample_limit': sample_limit,
+    }
 
 
 projects_table = get_projects_table()
@@ -940,10 +980,16 @@ def generate_personas(project_id: str, filters: dict, progress_callback: callabl
         f"[PERSONA] Context budget: {context_budget} chars, fetch limit: {fetch_limit} items"
     )
 
-    # Get feedback data
+    # Get feedback data: an even sample across EVERY matching item, not the
+    # newest fetch_limit of them (see shared/feedback.py::sample_feedback).
     try:
-        feedback_items = get_feedback_context(filters, limit=fetch_limit)
-        logger.info(f"[PERSONA] Fetched {len(feedback_items) if feedback_items else 0} feedback items")
+        feedback_items, feedback_matched, matched_is_lower_bound = sample_persona_feedback(
+            filters, fetch_limit,
+        )
+        logger.info(
+            f"[PERSONA] Sampled {len(feedback_items)} of {feedback_matched}"
+            f"{'+' if matched_is_lower_bound else ''} matching feedback items"
+        )
     except Exception as e:
         logger.error(f"[PERSONA] Failed to fetch feedback: {e}")
         raise
@@ -965,17 +1011,22 @@ def generate_personas(project_id: str, filters: dict, progress_callback: callabl
         raise
 
     # The fetch limit is a cap in its own right, and the one that bounds a large
-    # project: filters matching thousands of records yield exactly fetch_limit of
-    # them, with the rest never read. That loss is invisible to the truncation
-    # signal below (which compares what reached the model against what was
-    # FETCHED), so report it separately rather than letting "N of N items" imply
-    # N was the whole corpus.
-    fetch_limit_reached = len(feedback_items) >= fetch_limit
+    # project: filters matching thousands of records yield a fetch_limit-sized
+    # sample of them. That loss is invisible to the truncation signal below
+    # (which compares what reached the model against what was FETCHED), so
+    # report it separately rather than letting "N of N items" imply N was the
+    # whole corpus. Known exactly now that the pool is counted.
+    fetch_limit_reached = matched_is_lower_bound or feedback_matched > fetch_limit
     if fetch_limit_reached:
         logger.warning(
-            "[PERSONA] Fetch limit reached — more feedback may match the filters "
-            "than one generation reads",
-            extra={'fetch_limit': fetch_limit, 'items_fetched': len(feedback_items)},
+            "[PERSONA] More feedback matches the filters than one generation reads; "
+            "personas use an even sample",
+            extra={
+                'fetch_limit': fetch_limit,
+                'items_fetched': len(feedback_items),
+                'items_matched': feedback_matched,
+                'matched_is_lower_bound': matched_is_lower_bound,
+            },
         )
 
     # Trim on a record boundary so the model never receives half a review, and
@@ -1138,6 +1189,19 @@ def generate_personas(project_id: str, filters: dict, progress_callback: callabl
         # id keeps the same persona reproducing the same image.
         id_stamp = now_dt.strftime('%Y%m%d%H%M%S')
 
+        # What this batch was built from, recorded while the prompt's numbering
+        # still means something: "Review #N" in supporting_evidence is a
+        # position in feedback_items, and only the first feedback_items_used of
+        # them reached the model. Stored on every persona (not the job, whose
+        # TTL is 7 days) so "View source feedback" works for the persona's life.
+        batch_input_ids = input_feedback_ids(feedback_items, feedback_items_used)
+        feedback_provenance = {
+            'items_used': feedback_items_used,
+            'items_matched': feedback_matched,
+            'matched_is_lower_bound': matched_is_lower_bound,
+            'sample_limit': fetch_limit,
+        }
+
         # Build every persona item first, in parsed order. Avatars are attached
         # afterwards (concurrently) and the writes then follow this same order,
         # so which avatar call finishes first cannot reorder the personas.
@@ -1165,6 +1229,12 @@ def generate_personas(project_id: str, filters: dict, progress_callback: callabl
                 'scenario': persona.get('scenario', {}),
                 'research_notes': [],
                 'supporting_evidence': persona.get('supporting_evidence', []),
+                # The reviews THIS persona cites, as ids (see batch_input_ids).
+                'evidence_feedback_ids': resolve_evidence_ids(
+                    persona.get('supporting_evidence'), feedback_items, feedback_items_used,
+                ),
+                'input_feedback_ids': batch_input_ids,
+                'feedback_provenance': feedback_provenance,
                 'source_breakdown': source_breakdown,
                 'source_feedback_ids': [item.get('feedback_id', '') for item in feedback_items[:20]],
                 'avatar_url': None,
@@ -1310,6 +1380,10 @@ def generate_personas(project_id: str, filters: dict, progress_callback: callabl
                 # older job records already read it; prefer feedback_items_used
                 # for "what the personas are actually based on".
                 'feedback_count': len(feedback_items),
+                # Items matching the filters, which the fetched set was sampled
+                # from evenly; a floor when matched_is_lower_bound is True.
+                'feedback_matched': feedback_matched,
+                'matched_is_lower_bound': matched_is_lower_bound,
                 # Items that reached the persona-writing step. Equals
                 # feedback_count unless a cap dropped records, in which case
                 # context_truncated is True and this is the smaller, true number.
@@ -2350,6 +2424,60 @@ def regenerate_persona_avatar(project_id: str, persona_id: str) -> dict:
         'success': True,
         'avatar_url': avatar_result['avatar_url'],
         'avatar_prompt': avatar_result['avatar_prompt']
+    }
+
+
+# Which stored id list each "View source feedback" scope reads.
+PERSONA_FEEDBACK_SCOPES = {
+    'cited': 'evidence_feedback_ids',
+    'used': 'input_feedback_ids',
+}
+
+
+@tracer.capture_method
+def get_persona_source_feedback(
+    project_id: str, persona_id: str, scope: str, offset: int, limit: int,
+) -> dict:
+    """One page of the feedback a persona was generated from.
+
+    ``scope`` is 'cited' (the reviews this persona's evidence names) or 'used'
+    (every review its generation batch read). A persona generated before these
+    lists were recorded answers ``available: False`` — its "Review #N"
+    citations point into a list nothing kept, so there is nothing to resolve.
+    """
+    if not projects_table:
+        raise ConfigurationError('Projects table not configured')
+    field = PERSONA_FEEDBACK_SCOPES.get(scope)
+    if field is None:
+        raise ValidationError(f"scope must be one of: {', '.join(PERSONA_FEEDBACK_SCOPES)}")
+
+    response = projects_table.get_item(
+        Key={'pk': f'PROJECT#{project_id}', 'sk': f'PERSONA#{persona_id}'},
+        ProjectionExpression='persona_id, #ids, feedback_provenance',
+        ExpressionAttributeNames={'#ids': field},
+    )
+    item = response.get('Item')
+    if not item:
+        raise NotFoundError('Persona not found')
+
+    stored = item.get(field)
+    if not isinstance(stored, list):
+        return {
+            'available': False, 'scope': scope, 'total': 0, 'offset': 0,
+            'items': [], 'missing': 0, 'provenance': None,
+        }
+    ids = [value for value in stored if isinstance(value, str) and value]
+    items, missing = _get_feedback_by_ids(feedback_table, ids[offset:offset + limit])
+    return {
+        'available': True,
+        'scope': scope,
+        'total': len(ids),
+        'offset': offset,
+        'items': items,
+        # Deleted since generation: counted so the page can say so instead of
+        # showing a shorter list with no explanation.
+        'missing': len(missing),
+        'provenance': item.get('feedback_provenance'),
     }
 
 

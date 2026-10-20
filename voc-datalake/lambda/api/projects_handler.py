@@ -56,6 +56,8 @@ from projects import (
     create_persona, update_persona, delete_persona,
     add_persona_note, update_persona_note, delete_persona_note,
     regenerate_persona_avatar,
+    get_persona_source_feedback,
+    preview_persona_feedback,
     autoseed_project,
     autofill_prfaq_questions,
     suggest_research_questions,
@@ -236,6 +238,25 @@ def api_regenerate_persona_avatar(project_id: str, persona_id: str):
     return regenerate_persona_avatar(project_id, persona_id)
 
 
+# One page of a persona's source feedback is a page of per-id lookups, so it is
+# kept small enough to stay well inside the API Gateway timeout.
+PERSONA_FEEDBACK_PAGE_MAX = 50
+
+
+@app.get("/projects/<project_id>/personas/<persona_id>/feedback")
+@tracer.capture_method
+def api_get_persona_source_feedback(project_id: str, persona_id: str):
+    """The feedback a persona was generated from: ?scope=cited|used&offset&limit."""
+    params = app.current_event.query_string_parameters or {}
+    return get_persona_source_feedback(
+        project_id,
+        persona_id,
+        scope=params.get('scope', 'cited'),
+        offset=validate_int(params.get('offset'), default=0, min_val=0, max_val=100_000),
+        limit=validate_int(params.get('limit'), default=25, min_val=1, max_val=PERSONA_FEEDBACK_PAGE_MAX),
+    )
+
+
 def _extra_feedback_filters(body: dict) -> dict:
     """The shared-model filter dimensions from a JSON body, as a stored map.
 
@@ -253,23 +274,39 @@ def _extra_feedback_filters(body: dict) -> dict:
     return FeedbackFilters.from_mapping(body).to_dict()
 
 
+def _persona_feedback_scope(body: dict) -> dict:
+    """Which feedback a persona request draws from — shared by generation and
+    the wizard's preview count, so the number shown and the set generated
+    cannot be parsed two different ways."""
+    return {
+        'sources': body.get('sources', []),
+        'categories': body.get('categories', []),
+        'sentiments': body.get('sentiments', []),
+        # The richer shared-model dimensions (subcategory / urgent / enrichment /
+        # custom_fields). Parsed into FeedbackFilters, persisted as its to_dict()
+        # so only active dimensions are stored and applied as a post-pass.
+        # Absent/empty is a no-op, so the source/category/sentiment/days fields
+        # still drive the DynamoDB query unchanged.
+        'feedback_filters': _extra_feedback_filters(body),
+        'days': validate_days(body.get('days'), default=30),
+        'date_basis': validate_date_basis(body.get('date_basis')),
+    }
+
+
+@app.post("/projects/<project_id>/personas/preview-feedback")
+@tracer.capture_method
+def api_preview_persona_feedback(project_id: str):
+    """How many reviews match a persona request, and how many it would use."""
+    return preview_persona_feedback(_persona_feedback_scope(app.current_event.json_body or {}))
+
+
 @app.post("/projects/<project_id>/personas/generate")
 @tracer.capture_method
 def api_generate_personas(project_id: str):
     """Start async persona generation."""
     body = app.current_event.json_body or {}
     filters = {
-        'sources': body.get('sources', []),
-        'categories': body.get('categories', []),
-        'sentiments': body.get('sentiments', []),
-        # The richer shared-model dimensions (subcategory / urgent / enrichment /
-        # custom_fields). Parsed into FeedbackFilters, persisted as its to_dict()
-        # so only active dimensions are stored and get_feedback_context applies
-        # them as a post-pass. Absent/empty is a no-op, so the source/category/
-        # sentiment/days fields above still drive the DynamoDB query unchanged.
-        'feedback_filters': _extra_feedback_filters(body),
-        'days': validate_days(body.get('days'), default=30),
-        'date_basis': validate_date_basis(body.get('date_basis')),
+        **_persona_feedback_scope(body),
         'persona_count': validate_persona_count(body.get('persona_count')),
         'custom_instructions': body.get('custom_instructions', ''),
         # Forward the user's selected language so the persona generator's Bedrock
