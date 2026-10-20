@@ -36,39 +36,34 @@ describe('useCustomFilterControls', () => {
   })
 
   it('returns no controls and never fetches without an API endpoint', () => {
-    const { result } = renderHook(() => useCustomFilterControls('', {}), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useCustomFilterControls(''), { wrapper: createWrapper() })
     expect(result.current).toEqual([])
     expect(mockGetCustomFilters).not.toHaveBeenCalled()
   })
 
-  it('joins configured keys with candidate values and current selections', async () => {
+  it('joins configured keys with their candidate values', async () => {
     const { result } = renderHook(
-      () => useCustomFilterControls('https://api.example.com', { region: 'EMEA' }),
+      () => useCustomFilterControls('https://api.example.com'),
       { wrapper: createWrapper() },
     )
     await waitFor(() => expect(result.current).toHaveLength(1))
-    expect(result.current[0]).toEqual({
-      key: 'region',
-      label: 'Region',
-      values: ['EMEA', 'APAC'],
-      selected: 'EMEA',
-    })
+    expect(result.current[0]).toEqual({ key: 'region', label: 'Region', values: ['EMEA', 'APAC'] })
   })
 
   it('renders a configured key with empty values when it has no candidate suggestions', async () => {
     mockGetCustomFilters.mockResolvedValue({ custom_filters: [{ key: 'order_id', label: 'Order' }] })
     const { result } = renderHook(
-      () => useCustomFilterControls('https://api.example.com', {}),
+      () => useCustomFilterControls('https://api.example.com'),
       { wrapper: createWrapper() },
     )
     await waitFor(() => expect(result.current).toHaveLength(1))
-    expect(result.current[0]).toEqual({ key: 'order_id', label: 'Order', values: [], selected: '' })
+    expect(result.current[0]).toEqual({ key: 'order_id', label: 'Order', values: [] })
   })
 
   it('returns no controls when no filters are configured', async () => {
     mockGetCustomFilters.mockResolvedValue({ custom_filters: [] })
     const { result } = renderHook(
-      () => useCustomFilterControls('https://api.example.com', {}),
+      () => useCustomFilterControls('https://api.example.com'),
       { wrapper: createWrapper() },
     )
     // Give the queries a tick to resolve, then assert still empty.

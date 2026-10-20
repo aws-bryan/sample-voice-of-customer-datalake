@@ -13,9 +13,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 const mockGetProblems = vi.fn()
 vi.mock('../../api/problemsApi', () => ({
-  getProblems: (params: unknown) => mockGetProblems(params),
+  getProblems: (...args: unknown[]) => mockGetProblems(...args),
 }))
 
+import { EMPTY_FEEDBACK_FILTERS } from '../../api/feedbackFilters'
+import type { FeedbackFilterState } from '../../api/feedbackFilters'
 import { useProblemFeedback } from './useProblemFeedback'
 import type { ProblemLeaf } from '../../api/problemsApi'
 
@@ -54,9 +56,9 @@ function createWrapper(queryClient: QueryClient) {
   )
 }
 
-function render(threshold = 0.4, source: string | null = null) {
+function render(threshold = 0.4, filters: FeedbackFilterState = EMPTY_FEEDBACK_FILTERS) {
   return renderHook(
-    () => useProblemFeedback(DATE_PARAMS, API_ENDPOINT, threshold, source),
+    () => useProblemFeedback(DATE_PARAMS, API_ENDPOINT, threshold, filters),
     { wrapper: createWrapper(makeClient()) },
   )
 }
@@ -113,13 +115,32 @@ describe('useProblemFeedback', () => {
     await waitFor(() => expect(strict.result.current.categories[0].subcategories[0].problems).toHaveLength(2))
   })
 
-  it('passes the source through to the server query', async () => {
+  it('passes the window and the filters through to the server query', async () => {
     serve([])
-    render(0.4, 'webscraper')
+    const filters = { ...EMPTY_FEEDBACK_FILTERS, sources: ['webscraper', 'manual_import'], urgentOnly: true }
+    render(0.4, filters)
     await waitFor(() => expect(mockGetProblems).toHaveBeenCalled())
-    expect(mockGetProblems).toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'webscraper' }),
+    expect(mockGetProblems).toHaveBeenCalledWith(DATE_PARAMS, filters)
+  })
+
+  it('refetches when the filters change but not when only the threshold moves', async () => {
+    serve([leaf({ problem: 'order late' })])
+    const client = makeClient()
+    const { rerender } = renderHook(
+      ({ threshold, filters }: { threshold: number; filters: FeedbackFilterState }) =>
+        useProblemFeedback(DATE_PARAMS, API_ENDPOINT, threshold, filters),
+      {
+        wrapper: createWrapper(client),
+        initialProps: { threshold: 0.4, filters: EMPTY_FEEDBACK_FILTERS },
+      },
     )
+    await waitFor(() => expect(mockGetProblems).toHaveBeenCalledTimes(1))
+
+    rerender({ threshold: 0.8, filters: EMPTY_FEEDBACK_FILTERS })
+    expect(mockGetProblems).toHaveBeenCalledTimes(1)
+
+    rerender({ threshold: 0.8, filters: { ...EMPTY_FEEDBACK_FILTERS, categories: ['delivery'] } })
+    await waitFor(() => expect(mockGetProblems).toHaveBeenCalledTimes(2))
   })
 
   it('surfaces the partial-window flag', async () => {

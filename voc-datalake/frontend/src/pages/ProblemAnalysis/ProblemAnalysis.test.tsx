@@ -35,22 +35,13 @@ vi.mock('../../api/client', () => ({
 
 // Capture the params so a test can assert custom-field selections reach it.
 vi.mock('../../api/problemsApi', () => ({
-  getProblems: (params: unknown) => mockGetProblems(params),
+  getProblems: (...args: unknown[]) => mockGetProblems(...args),
 }))
 
-// Custom-filter config + candidates feed the dropdowns (same as Categories).
-// `toCustomFieldParams` is a pure helper used by the data layer; keep its real
-// behavior so the drill-down builds correct cf_ params.
+// Custom-filter config + candidates feed the custom-field groups (same as Categories).
 vi.mock('../../api/customFiltersApi', () => ({
   getCustomFilters: () => mockGetCustomFilters(),
   getCustomFieldCandidates: () => mockGetCustomFieldCandidates(),
-  toCustomFieldParams: (filters: Record<string, string>) => {
-    const params: Record<string, string> = {}
-    for (const [key, value] of Object.entries(filters)) {
-      if (value) params[`cf_${key}`] = value
-    }
-    return params
-  },
 }))
 
 vi.mock('../../store/configStore', () => ({
@@ -62,7 +53,18 @@ vi.mock('../../store/configStore', () => ({
   }),
 }))
 
+import { restorePages, useFeedbackFilterStore } from '../../store/feedbackFilterStore'
 import ProblemAnalysis from './ProblemAnalysis'
+
+/** The page's filters persist in a module-level store; start every test clean. */
+function resetFilterStore() {
+  useFeedbackFilterStore.setState({ pages: restorePages({}) })
+}
+
+/** The filter panel body is collapsed by default; open it to reach its controls. */
+async function openFilterPanel(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: /^Filters/ }))
+}
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -133,6 +135,7 @@ const mockEntities = {
 describe('ProblemAnalysis', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetFilterStore()
     mockGetProblems.mockResolvedValue(problemsResponse)
     mockGetFeedback.mockResolvedValue({ items: mockFeedbackItems, count: 1 })
     mockGetEntities.mockResolvedValue(mockEntities)
@@ -146,17 +149,19 @@ describe('ProblemAnalysis', () => {
   })
 
   describe('custom filters', () => {
-    it('passes a selected custom filter through to getProblems', async () => {
+    it('passes several selected values of a custom field through to getProblems', async () => {
+      const user = userEvent.setup()
       render(<ProblemAnalysis />, { wrapper: createWrapper() })
 
-      // The configured "Tier" dropdown renders once config + candidates load.
-      const tierSelect = await screen.findByRole('combobox', { name: /filter by tier/i })
-
-      await userEvent.selectOptions(tierSelect, 'Gold')
+      await openFilterPanel(user)
+      // The configured "Tier" group renders once config + candidates load.
+      await user.click(await screen.findByRole('checkbox', { name: 'Gold' }))
+      await user.click(screen.getByRole('checkbox', { name: 'Platinum' }))
 
       await waitFor(() => {
         expect(mockGetProblems).toHaveBeenCalledWith(
-          expect.objectContaining({ customFilters: { tier: 'Gold' } }),
+          { days: 7 },
+          expect.objectContaining({ customFields: { tier: ['Gold', 'Platinum'] } }),
         )
       })
     })
@@ -166,12 +171,12 @@ describe('ProblemAnalysis', () => {
     it('renders stats cards', async () => {
       render(<ProblemAnalysis />, { wrapper: createWrapper() })
 
+      // `span` scopes to the stat labels: "Categories" and "Subcategories"
+      // are also the filter panel's group legends.
       await waitFor(() => {
-        expect(screen.getByText('Categories')).toBeInTheDocument()
-        expect(screen.getByText('Subcategories')).toBeInTheDocument()
-        expect(screen.getByText('Problems')).toBeInTheDocument()
-        expect(screen.getByText('Feedback')).toBeInTheDocument()
-        expect(screen.getByText('Urgent')).toBeInTheDocument()
+        for (const label of ['Categories', 'Subcategories', 'Problems', 'Feedback', 'Urgent']) {
+          expect(screen.getByText(label, { selector: 'span' })).toBeInTheDocument()
+        }
       })
     })
   })
@@ -225,19 +230,75 @@ describe('ProblemAnalysis', () => {
     })
   })
 
-  describe('source filtering', () => {
-    it('renders source filter dropdown with available sources', async () => {
+  describe('shared filter panel', () => {
+    it('offers every source in the window and sends the selection to the server', async () => {
+      const user = userEvent.setup()
       render(<ProblemAnalysis />, { wrapper: createWrapper() })
 
+      await openFilterPanel(user)
+      expect(await screen.findByRole('checkbox', { name: /manual import/i })).toBeInTheDocument()
+      await user.click(screen.getByRole('checkbox', { name: /webscraper/i }))
+
       await waitFor(() => {
-        expect(document.querySelector('.animate-spin')).not.toBeInTheDocument()
+        expect(mockGetProblems).toHaveBeenCalledWith(
+          { days: 7 },
+          expect.objectContaining({ sources: ['webscraper'] }),
+        )
       })
+    })
 
-      const sourceSelects = document.querySelectorAll('select')
-      expect(sourceSelects.length).toBeGreaterThan(0)
+    it('keeps the panel open and the earlier tree up while a filter change loads', async () => {
+      const user = userEvent.setup()
+      mockGetProblems.mockResolvedValueOnce(problemsResponse).mockReturnValue(new Promise(() => {}))
+      render(<ProblemAnalysis />, { wrapper: createWrapper() })
 
-      const firstSelect = sourceSelects[0]
-      expect(firstSelect.querySelector('option[value=""]')).toBeTruthy()
+      await openFilterPanel(user)
+      await user.click(await screen.findByRole('checkbox', { name: /webscraper/i }))
+      await waitFor(() => expect(mockGetProblems).toHaveBeenCalledTimes(2))
+
+      // The page was not swapped for a spinner: the panel is still open and the
+      // previous tree is still rendered.
+      expect(screen.getByRole('button', { name: /^Filters/ })).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByRole('button', { name: /delivery/i })).toBeInTheDocument()
+      expect(screen.getByRole('status')).toHaveTextContent('Updating…')
+    })
+
+    it('shows a failed read under the panel, with a retry, instead of replacing the page', async () => {
+      const user = userEvent.setup()
+      mockGetProblems.mockResolvedValueOnce(problemsResponse).mockRejectedValue(new Error('boom'))
+      render(<ProblemAnalysis />, { wrapper: createWrapper() })
+
+      await openFilterPanel(user)
+      await user.click(await screen.findByRole('checkbox', { name: /webscraper/i }))
+
+      expect(await screen.findByRole('button', { name: /retry/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^Filters/ })).toHaveAttribute('aria-expanded', 'true')
+      // Zero stats would read as a finding, so they are hidden while nothing was read.
+      expect(screen.queryByText('Subcategories', { selector: 'span' })).not.toBeInTheDocument()
+    })
+
+    it('narrows the tree by subcategory without asking the server', async () => {
+      const user = userEvent.setup()
+      mockGetProblems.mockResolvedValue({
+        ...problemsResponse,
+        problems: [
+          ...problemsResponse.problems,
+          { ...problemsResponse.problems[0], subcategory: 'packaging', problem: 'Box crushed', keywords: ['box'] },
+        ],
+      })
+      render(<ProblemAnalysis />, { wrapper: createWrapper() })
+
+      await openFilterPanel(user)
+      await user.click(await screen.findByRole('checkbox', { name: /packaging/i }))
+      await user.click(screen.getByRole('button', { name: 'Expand All' }))
+
+      // Only the packaging subtree is left in the (fully expanded) tree.
+      expect(await screen.findByText('Box crushed')).toBeInTheDocument()
+      expect(screen.queryByText('Slow delivery times')).not.toBeInTheDocument()
+      // Subcategory is a tree post-filter: the server never receives it.
+      for (const [, filters] of mockGetProblems.mock.calls) {
+        expect(filters).toEqual(expect.objectContaining({ subcategories: [] }))
+      }
     })
   })
 })
@@ -249,6 +310,7 @@ describe('ProblemAnalysis', () => {
 describe('problem resolution (issue #66)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetFilterStore()
     mockGetProblems.mockResolvedValue(problemsResponse)
     mockGetFeedback.mockResolvedValue({ items: mockFeedbackItems, count: 1 })
     mockGetEntities.mockResolvedValue(mockEntities)

@@ -5,19 +5,33 @@ vi.mock('./client', () => ({
   fetchApi: (...args: unknown[]) => mockFetchApi(...args),
 }))
 
+import { EMPTY_FEEDBACK_FILTERS } from './feedbackFilters'
 import { getProblems } from './problemsApi'
 
 describe('getProblems', () => {
   beforeEach(() => mockFetchApi.mockReset())
 
-  it('GETs /feedback/problems with the window params', async () => {
+  it('GETs /feedback/problems with the window params and the shared filters', async () => {
     mockFetchApi.mockResolvedValue({ period_days: 7, feedback_count: 0, is_partial: false, problems: [] })
-    await getProblems({ days: 7, date_basis: 'review', source: 'webscraper' })
-    const url = mockFetchApi.mock.calls[0][0] as string
-    expect(url).toContain('/feedback/problems?')
-    expect(url).toContain('days=7')
-    expect(url).toContain('date_basis=review')
-    expect(url).toContain('source=webscraper')
+    await getProblems(
+      { days: 7, date_basis: 'review' },
+      { ...EMPTY_FEEDBACK_FILTERS, sources: ['webscraper', 'manual_import'], urgentOnly: true, customFields: { tier: ['gold'] } },
+    )
+    const url = new URL(String(mockFetchApi.mock.calls[0][0]), 'https://api.test')
+    expect(url.pathname).toBe('/feedback/problems')
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      days: '7',
+      date_basis: 'review',
+      source: 'webscraper,manual_import',
+      urgent: 'true',
+      cf_tier: 'gold',
+    })
+  })
+
+  it('sends only the window params when no filters are given', async () => {
+    mockFetchApi.mockResolvedValue({ period_days: 7, feedback_count: 0, is_partial: false, problems: [] })
+    await getProblems({ days: 7 })
+    expect(mockFetchApi).toHaveBeenCalledWith('/feedback/problems?days=7')
   })
 
   it('returns the parsed problem leaves', async () => {

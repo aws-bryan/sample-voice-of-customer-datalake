@@ -12,21 +12,33 @@
  */
 
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import clsx from 'clsx'
 import { 
   ChevronDown, ChevronRight, AlertTriangle, 
-  MessageSquare, TrendingUp, Filter, X, Layers, FileDown
+  MessageSquare, TrendingUp, X, Layers
 } from 'lucide-react'
 import { api, getDateRangeParams } from '../../api/client'
+import type { FeedbackItem } from '../../api/client'
 import { useConfigStore } from '../../store/configStore'
-import { CustomFilterSelects } from '../../components/CustomFilterSelects'
+import { usePageFilters } from '../../store/feedbackFilterStore'
+import { filtersKey } from '../../api/feedbackFilters'
+import { FILTER_QUERY_DEBOUNCE_MS, useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { useSettledOnce } from '../../hooks/useSettledOnce'
+import FeedbackFilterPanel from '../../components/FeedbackFilterPanel'
+import FeedbackDetailOverlay from '../../components/FeedbackDetailOverlay'
 import { useCustomFilterControls } from '../Categories/useCustomFilterControls'
+import { ProblemControls } from './ProblemControls'
 import { SubcategoryRow } from './SubcategoryRow'
 import { applyResolution } from './problemResolution'
 import { useProblemResolution } from './useProblemResolution'
 import { useProblemFeedback } from './useProblemFeedback'
+import type { ProblemTree } from './useProblemFeedback'
 import { WindowCoverageNotice } from './WindowCoverageNotice'
-import type { CategoryGroup, ProblemGroup, SubcategoryGroup } from './problemResolution'
+import type { CategoryGroup } from './problemResolution'
+import type { FeedbackFilterState } from '../../api/feedbackFilters'
+import type { EntitiesResponse } from '../../api/types'
+import type { CustomFilterControl } from '../../components/FeedbackFilterPanel'
 import { generateProblemAnalysisPDF } from './problemAnalysisPdfGenerator'
 import { getTimeRangeLabel } from '../../utils/dateUtils'
 import { useTranslation } from 'react-i18next'
@@ -58,39 +70,52 @@ function toPDFCategories(groups: CategoryGroup[]) {
   }))
 }
 
-// Module-level so the operator chain doesn't count against the page
-// component's complexity budget.
-function anyFilterActive(...filters: Array<string | boolean | null>): boolean {
-  return filters.some(Boolean)
+/** The PDF header's "filtered by" lines; multi-selections are comma-joined. */
+function toPdfFilters(filters: FeedbackFilterState) {
+  const joined = (values: readonly string[]) => (values.length > 0 ? values.join(', ') : null)
+  return {
+    source: joined(filters.sources),
+    category: joined(filters.categories),
+    subcategory: joined(filters.subcategories),
+    urgentOnly: filters.urgentOnly,
+  }
+}
+
+interface ProblemFilterPanelProps {
+  readonly filters: FeedbackFilterState
+  readonly onChange: (next: FeedbackFilterState) => void
+  readonly entities: EntitiesResponse | undefined
+  readonly subcategories: readonly string[]
+  readonly customFilterControls: readonly CustomFilterControl[]
+  readonly isUpdating: boolean
+}
+
+function ProblemFilterPanel({ filters, onChange, entities, subcategories, customFilterControls, isUpdating }: ProblemFilterPanelProps) {
+  const sources = entities?.entities.sources ?? {}
+  const categories = entities?.entities.categories ?? {}
+  return (
+    <FeedbackFilterPanel
+      filters={filters}
+      onChange={onChange}
+      options={{ sources: Object.keys(sources), categories: Object.keys(categories), subcategories }}
+      counts={{ sources, categories }}
+      customFilterControls={customFilterControls}
+      isUpdating={isUpdating}
+    />
+  )
 }
 
 /**
- * Post-filter the server-built tree by category / subcategory / urgent-only,
- * recomputing each level's totals so headers reflect what remains. Source is
- * applied server-side (a query param), so it is not handled here. A category
- * or subcategory left with no problems is dropped so empty branches don't show.
+ * Narrow the server-built tree to the selected subcategories, recomputing each
+ * category's totals so headers reflect what remains; a category left with no
+ * subcategory is dropped. Every other filter was applied to rows server-side
+ * before aggregation, so it is not handled here. No selection keeps the tree.
  */
-function filterTree(
-  categories: CategoryGroup[],
-  filters: { category: string | null; subcategory: string | null; urgentOnly: boolean },
-): CategoryGroup[] {
-  const keepProblem = (p: ProblemGroup) => !filters.urgentOnly || p.urgentCount > 0
-  const rebuiltSub = (s: SubcategoryGroup): SubcategoryGroup => {
-    const problems = s.problems.filter(keepProblem)
-    return {
-      ...s,
-      problems,
-      totalItems: problems.reduce((sum, p) => sum + p.itemCount, 0),
-      urgentCount: problems.reduce((sum, p) => sum + p.urgentCount, 0),
-    }
-  }
+function filterTreeBySubcategory(categories: CategoryGroup[], selected: readonly string[]): CategoryGroup[] {
+  if (selected.length === 0) return categories
   return categories
-    .filter((c) => !filters.category || c.category === filters.category)
     .map((c) => {
-      const subcategories = c.subcategories
-        .filter((s) => !filters.subcategory || s.subcategory === filters.subcategory)
-        .map(rebuiltSub)
-        .filter((s) => s.problems.length > 0)
+      const subcategories = c.subcategories.filter((s) => selected.includes(s.subcategory))
       return {
         ...c,
         subcategories,
@@ -124,6 +149,82 @@ function EmptyProblemsState({ resolvedCount }: { readonly resolvedCount: number 
   )
 }
 
+/** Nothing was read, so every aggregate would be a zero that looks like a finding. */
+function nothingRead(feedback: ProblemTree): boolean {
+  return feedback.isError && feedback.loadedCount === 0
+}
+
+function StatCard({ icon, label, value, urgent = false }: Readonly<{
+  icon: React.ReactNode; label: string; value: number; urgent?: boolean
+}>) {
+  return (
+    <div className={clsx(
+      'rounded-xl p-3 sm:p-4 border shadow-sm',
+      urgent ? 'border-red-200 bg-red-50 col-span-2 sm:col-span-1' : 'bg-white border-gray-200',
+    )}>
+      <div className={clsx('flex items-center gap-1.5 sm:gap-2 mb-1', urgent ? 'text-red-600' : 'text-gray-600')}>
+        {icon}
+        <span className="text-xs sm:text-sm truncate">{label}</span>
+      </div>
+      <p className={clsx('text-xl sm:text-2xl font-bold', urgent ? 'text-red-700' : 'text-gray-900')}>{value}</p>
+    </div>
+  )
+}
+
+/** Header stats plus their coverage notice; hidden when nothing was read. */
+function ProblemSummary({ visibleData, feedback, isUpdating }: Readonly<{
+  visibleData: CategoryGroup[]; feedback: ProblemTree; isUpdating: boolean
+}>) {
+  if (nothingRead(feedback)) return null
+  const subcategories = visibleData.flatMap((g) => g.subcategories)
+  const iconClass = 'sm:w-4 sm:h-4'
+  return (
+    <>
+      <div className={clsx('grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4 transition-opacity', isUpdating && 'opacity-60')}>
+        <StatCard icon={<TrendingUp size={14} className={iconClass} />} label="Categories" value={visibleData.length} />
+        <StatCard icon={<Layers size={14} className={iconClass} />} label="Subcategories" value={subcategories.length} />
+        <StatCard icon={<AlertTriangle size={14} className={iconClass} />} label="Problems"
+          value={subcategories.reduce((sum, s) => sum + s.problems.length, 0)} />
+        <StatCard icon={<MessageSquare size={14} className={iconClass} />} label="Feedback"
+          value={visibleData.reduce((sum, g) => sum + g.totalItems, 0)} />
+        <StatCard icon={<AlertTriangle size={14} className={iconClass} />} label="Urgent" urgent
+          value={visibleData.reduce((sum, g) => sum + g.urgentCount, 0)} />
+      </div>
+      {/* Coverage of the counts above; self-hiding when the window was read in
+          full. Rationale lives in the component. */}
+      <WindowCoverageNotice
+        isPartial={feedback.isPartial}
+        hasFailed={feedback.isError}
+        loadedCount={feedback.loadedCount}
+        totalCount={feedback.totalCount}
+      />
+    </>
+  )
+}
+
+/**
+ * The problem tree area. A failed read, an empty result and a re-query all
+ * render HERE, so the filter panel above stays mounted across changes.
+ */
+function ProblemTreeArea({ feedback, isUpdating, resolvedCount, isEmpty, children }: Readonly<{
+  feedback: ProblemTree; isUpdating: boolean; resolvedCount: number; isEmpty: boolean; children: React.ReactNode
+}>) {
+  if (nothingRead(feedback)) {
+    // Say the window is unknown instead of implying it is empty, with a retry.
+    return (
+      <div className="flex justify-center py-8">
+        <WindowCoverageNotice isPartial={false} hasFailed loadedCount={0} totalCount={0} onRetry={feedback.retry} />
+      </div>
+    )
+  }
+  if (isEmpty && !isUpdating) return <EmptyProblemsState resolvedCount={resolvedCount} />
+  return (
+    <div aria-busy={isUpdating} className={clsx('space-y-3 sm:space-y-4 transition-opacity', isUpdating && 'opacity-60')}>
+      {children}
+    </div>
+  )
+}
+
 // Rendered when persisting a resolve/unresolve fails; kept out of the page
 // component so the conditional doesn't count against its complexity budget.
 function ResolveErrorBanner({ show, onDismiss }: { readonly show: boolean; readonly onDismiss: () => void }) {
@@ -147,44 +248,37 @@ export default function ProblemAnalysis() {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [expandedSubcategories, setExpandedSubcategories] = useState<Set<string>>(new Set())
   const [expandedProblems, setExpandedProblems] = useState<Set<string>>(new Set())
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
-  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null)
-  const [selectedSource, setSelectedSource] = useState<string | null>(null)
-  const [showUrgentOnly, setShowUrgentOnly] = useState(false)
   const [showResolved, setShowResolved] = useState(false)
   const [similarityThreshold, setSimilarityThreshold] = useState(0.4)
-  // Admin-configured custom-field selections (key -> value). Row-level filters
-  // pushed down to the server before aggregation, same as source.
-  const [customFilters, setCustomFilters] = useState<Record<string, string>>({})
+  const [openFeedback, setOpenFeedback] = useState<FeedbackItem | null>(null)
+  // The shared, persisted filters. Every dimension except subcategory is sent to
+  // the server (applied to rows BEFORE aggregation); subcategory narrows the
+  // built tree, so the panel keeps offering every subcategory of the selection.
+  const { filters, setFilters } = usePageFilters('problemAnalysis')
+  // The server dimensions are debounced, so several quick changes cost one
+  // aggregate; subcategory stays live (it only narrows the built tree).
+  const queryFilters = useDebouncedValue(filters, FILTER_QUERY_DEBOUNCE_MS)
+  const serverFilters = useMemo(() => ({ ...queryFilters, subcategories: [] }), [queryFilters])
 
-  const setCustomFilter = (key: string, value: string) =>
-    setCustomFilters((prev) => {
-      const next = { ...prev }
-      if (value) next[key] = value
-      else delete next[key]
-      return next
-    })
-
-  // Fetch entities for dynamic sources and categories
+  // Fetch entities for dynamic sources and categories (kept across window
+  // changes so the panel's options never empty out mid-selection).
   const { data: entitiesData } = useQuery({
     queryKey: ['entities', dateParams],
     queryFn: () => api.getEntities({ ...dateParams, limit: 100 }),
     enabled: !!config.apiEndpoint,
+    placeholderData: keepPreviousData,
   })
 
   // Admin-configured custom-field filter dropdowns (same hook Categories uses):
   // joins the saved filter config with the recommended values per key.
-  const customFilterControls = useCustomFilterControls(config.apiEndpoint, customFilters)
+  const customFilterControls = useCustomFilterControls(config.apiEndpoint)
 
   // The server aggregates the FULL window into finest-grain problem leaves;
   // this hook merges them to `similarityThreshold` in-browser (the slider
-  // re-merges without re-fetching). `selectedSource` and the custom-field
-  // selections are pushed down as server query params — they're row-level
-  // filters, so applying them before aggregation is both correct and cheaper
-  // than filtering a built tree.
-  const feedback = useProblemFeedback(
-    dateParams, config.apiEndpoint, similarityThreshold, selectedSource, customFilters,
-  )
+  // re-merges without re-fetching). The filters are pushed down as server query
+  // params — they're row-level, so applying them before aggregation is both
+  // correct and cheaper than filtering a built tree.
+  const feedback = useProblemFeedback(dateParams, config.apiEndpoint, similarityThreshold, serverFilters)
 
   // Resolved problems are shared across users (issue #66); resolving one
   // clears it from everyone's default view. All query/mutation wiring lives
@@ -194,23 +288,17 @@ export default function ProblemAnalysis() {
     toggleResolved, dismissToggleError,
   } = useProblemResolution(!!config.apiEndpoint)
 
-  // Build dynamic sources list from entities
-  const allSources = useMemo(() => {
-    if (!entitiesData?.entities?.sources) return []
-    return Object.keys(entitiesData.entities.sources)
-      .sort((a, b) => (entitiesData.entities.sources[b] || 0) - (entitiesData.entities.sources[a] || 0))
-  }, [entitiesData])
+  // Gate the FIRST load on the resolved-state query too: without it, resolved
+  // problems flash as unresolved for a frame and then vanish when it lands.
+  const settled = useSettledOnce(feedback.isLoading || resolvedLoading)
+  const isUpdating = feedback.isUpdating || filtersKey({ ...filters, subcategories: [] }) !== filtersKey(serverFilters)
 
-  // Category/subcategory/urgent are post-filters over the SERVER-BUILT tree
-  // (source already applied server-side). Recompute each level's totals so the
-  // headers reflect what the filter leaves visible.
+  // Subcategory is the one post-filter over the SERVER-BUILT tree (everything
+  // else was applied to rows server-side). Totals are recomputed so headers
+  // reflect what the filter leaves visible.
   const filteredTree = useMemo(
-    () => filterTree(feedback.categories, {
-      category: selectedCategory,
-      subcategory: selectedSubcategory,
-      urgentOnly: showUrgentOnly,
-    }),
-    [feedback.categories, selectedCategory, selectedSubcategory, showUrgentOnly],
+    () => filterTreeBySubcategory(feedback.categories, filters.subcategories),
+    [feedback.categories, filters.subcategories],
   )
 
   // Annotate problem groups with their shared resolved status and hide the
@@ -221,20 +309,12 @@ export default function ProblemAnalysis() {
     [filteredTree, resolvedMap, showResolved],
   )
 
-  // Get unique categories from entities (dynamic)
-  const allCategories = useMemo(() => {
-    if (!entitiesData?.entities?.categories) return []
-    const categories = entitiesData.entities.categories
-    return Object.keys(categories)
-      .sort((a, b) => (categories[b] ?? 0) - (categories[a] ?? 0))
-  }, [entitiesData])
-
-  // Window + source + custom filters handed to each expanded problem for its
-  // on-demand row fetch, so examples match the same filter as the tree.
-  // Memoized so a problem row isn't re-rendered on unrelated state.
+  // Window + filters handed to each expanded problem for its on-demand row
+  // fetch, so examples match the same selection as the tree. Memoized so a
+  // problem row isn't re-rendered on unrelated state.
   const drillParams = useMemo(
-    () => ({ dateParams, source: selectedSource, customFilters }),
-    [dateParams, selectedSource, customFilters],
+    () => ({ dateParams, filters: serverFilters, onOpenFeedback: setOpenFeedback }),
+    [dateParams, serverFilters],
   )
 
   // Subcategories present in the aggregated tree (for the filter dropdown).
@@ -296,12 +376,6 @@ export default function ProblemAnalysis() {
     setExpandedProblems(new Set())
   }
 
-  const totalSubcategories = visibleData.reduce((sum, g) => sum + g.subcategories.length, 0)
-  const totalProblems = visibleData.reduce((sum, g) => 
-    sum + g.subcategories.reduce((s, sub) => s + sub.problems.length, 0), 0)
-  const totalFeedback = visibleData.reduce((sum, g) => sum + g.totalItems, 0)
-  const totalUrgent = visibleData.reduce((sum, g) => sum + g.urgentCount, 0)
-
   const exportPDF = () => {
     if (visibleData.length === 0) return
     try {
@@ -309,12 +383,9 @@ export default function ProblemAnalysis() {
         categories: toPDFCategories(visibleData),
         timeRange: getTimeRangeLabel(timeRange, customDays, dateBasis),
         resolvedLabel: t('problemResolution.resolved'),
-        filters: {
-          source: selectedSource,
-          category: selectedCategory,
-          subcategory: selectedSubcategory,
-          urgentOnly: showUrgentOnly,
-        },
+        // What the exported tree was built from: the queried server filters
+        // plus the live subcategory narrowing.
+        filters: toPdfFilters({ ...serverFilters, subcategories: filters.subcategories }),
       })
     } catch {
       // PDF generation is best-effort (e.g. popup blocked)
@@ -329,9 +400,9 @@ export default function ProblemAnalysis() {
     )
   }
 
-  // Gate on the resolved-state query too: without it, resolved problems
-  // flash as unresolved for a frame and then vanish when the query lands.
-  if (feedback.isLoading || resolvedLoading) {
+  // Full-page spinner for the FIRST load only; every later state (a re-query,
+  // an empty result, a failed read) renders under the panel so it stays open.
+  if (!settled) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -339,191 +410,39 @@ export default function ProblemAnalysis() {
     )
   }
 
-  // Nothing was read, so every aggregate below would be a zero that looks like
-  // a finding. Say the window is unknown instead of implying it is empty.
-  if (feedback.isError && feedback.loadedCount === 0) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <WindowCoverageNotice
-          isPartial={false}
-          hasFailed
-          loadedCount={0}
-          totalCount={0}
-          onRetry={feedback.retry}
-        />
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
-        <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 mb-1">
-            <TrendingUp size={14} className="sm:w-4 sm:h-4" />
-            <span className="text-xs sm:text-sm">Categories</span>
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-gray-900">{visibleData.length}</p>
-        </div>
-        <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 mb-1">
-            <Layers size={14} className="sm:w-4 sm:h-4" />
-            <span className="text-xs sm:text-sm">Subcategories</span>
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-gray-900">{totalSubcategories}</p>
-        </div>
-        <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 mb-1">
-            <AlertTriangle size={14} className="sm:w-4 sm:h-4" />
-            <span className="text-xs sm:text-sm truncate">Problems</span>
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-gray-900">{totalProblems}</p>
-        </div>
-        <div className="bg-white rounded-xl p-3 sm:p-4 border border-gray-200 shadow-sm">
-          <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 mb-1">
-            <MessageSquare size={14} className="sm:w-4 sm:h-4" />
-            <span className="text-xs sm:text-sm">Feedback</span>
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-gray-900">{totalFeedback}</p>
-        </div>
-        <div className="bg-white rounded-xl p-3 sm:p-4 border border-red-200 shadow-sm bg-red-50 col-span-2 sm:col-span-1">
-          <div className="flex items-center gap-1.5 sm:gap-2 text-red-600 mb-1">
-            <AlertTriangle size={14} className="sm:w-4 sm:h-4" />
-            <span className="text-xs sm:text-sm">Urgent</span>
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-red-700">{totalUrgent}</p>
-        </div>
-      </div>
+      <ProblemSummary visibleData={visibleData} feedback={feedback} isUpdating={isUpdating} />
 
-      {/* Coverage of the counts above; self-hiding when the window was read in
-          full. Rationale lives in the component. */}
-      <WindowCoverageNotice
-        isPartial={feedback.isPartial}
-        hasFailed={feedback.isError}
-        loadedCount={feedback.loadedCount}
-        totalCount={feedback.totalCount}
+      <ProblemFilterPanel
+        filters={filters}
+        onChange={setFilters}
+        entities={entitiesData}
+        subcategories={allSubcategories}
+        customFilterControls={customFilterControls}
+        isUpdating={isUpdating}
       />
-
-      {/* Filters & Controls */}
-      <div className="card">
-        <div className="flex flex-col gap-3 sm:gap-4">
-          {/* Filter Row */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <Filter size={16} className="text-gray-500 flex-shrink-0 sm:w-[18px] sm:h-[18px]" />
-            <select
-              value={selectedSource || ''}
-              onChange={(e) => setSelectedSource(e.target.value || null)}
-              className="flex-1 sm:flex-none px-2.5 sm:px-3 py-1.5 border border-gray-300 rounded-lg text-xs sm:text-sm min-w-0 sm:min-w-[140px]"
-            >
-              <option value="">All Sources</option>
-              {allSources.map(source => (
-                <option key={source} value={source}>{source}</option>
-              ))}
-            </select>
-            <select
-              value={selectedCategory || ''}
-              onChange={(e) => { setSelectedCategory(e.target.value || null); setSelectedSubcategory(null) }}
-              className="flex-1 sm:flex-none px-2.5 sm:px-3 py-1.5 border border-gray-300 rounded-lg text-xs sm:text-sm min-w-0 sm:min-w-[140px]"
-            >
-              <option value="">All Categories</option>
-              {allCategories.map(cat => (
-                <option key={cat} value={cat}>{cat.replace('_', ' ')}</option>
-              ))}
-            </select>
-            <select
-              value={selectedSubcategory || ''}
-              onChange={(e) => setSelectedSubcategory(e.target.value || null)}
-              className="flex-1 sm:flex-none px-2.5 sm:px-3 py-1.5 border border-gray-300 rounded-lg text-xs sm:text-sm min-w-0 sm:min-w-[140px]"
-            >
-              <option value="">All Subcategories</option>
-              {allSubcategories.map(sub => (
-                <option key={sub} value={sub}>{sub.replace('_', ' ')}</option>
-              ))}
-            </select>
-            {/* Admin-configured custom-field filters (empty = none configured). */}
-            <CustomFilterSelects controls={customFilterControls} onChange={setCustomFilter} />
-          </div>
-          
-          {/* Controls Row */}
-          <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
-                <input
-                  type="checkbox"
-                  checked={showUrgentOnly}
-                  onChange={(e) => setShowUrgentOnly(e.target.checked)}
-                  className="rounded border-gray-300 w-3.5 h-3.5 sm:w-4 sm:h-4"
-                />
-                <span>Urgent only</span>
-              </label>
-              <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
-                <input
-                  type="checkbox"
-                  checked={showResolved}
-                  onChange={(e) => setShowResolved(e.target.checked)}
-                  className="rounded border-gray-300 w-3.5 h-3.5 sm:w-4 sm:h-4"
-                />
-                {/* Counts resolved problems within the CURRENT filters
-                    (what the toggle would reveal), not the global store. */}
-                <span>{t('problemResolution.showResolved', { total: resolvedCount })}</span>
-              </label>
-              {anyFilterActive(selectedSource, selectedCategory, selectedSubcategory, showUrgentOnly, showResolved, Object.keys(customFilters).length > 0) && (
-                <button
-                  onClick={() => { setSelectedSource(null); setSelectedCategory(null); setSelectedSubcategory(null); setShowUrgentOnly(false); setShowResolved(false); setCustomFilters({}) }}
-                  className="text-xs sm:text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 active:scale-95"
-                >
-                  <X size={12} className="sm:w-[14px] sm:h-[14px]" />
-                  Clear
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-              <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
-                <span className="text-gray-500 hidden xs:inline">Similarity:</span>
-                <select
-                  value={similarityThreshold}
-                  onChange={(e) => setSimilarityThreshold(parseFloat(e.target.value))}
-                  className="px-2 py-1 border border-gray-300 rounded text-xs sm:text-sm"
-                  title="Higher = stricter matching, fewer merged groups"
-                >
-                  <option value={0.2}>Low</option>
-                  <option value={0.4}>Med</option>
-                  <option value={0.6}>High</option>
-                  <option value={1.0}>Off</option>
-                </select>
-              </div>
-              <div className="flex gap-1.5 sm:gap-2">
-                <button onClick={expandAll} className="btn btn-secondary text-xs px-2 py-1 sm:px-3 sm:py-1.5 active:scale-95">
-                  <span className="hidden xs:inline">Expand All</span>
-                  <span className="xs:hidden">Expand</span>
-                </button>
-                <button onClick={collapseAll} className="btn btn-secondary text-xs px-2 py-1 sm:px-3 sm:py-1.5 active:scale-95">
-                  <span className="hidden xs:inline">Collapse All</span>
-                  <span className="xs:hidden">Collapse</span>
-                </button>
-                <button
-                  onClick={exportPDF}
-                  disabled={visibleData.length === 0}
-                  className="btn btn-secondary text-xs px-2 py-1 sm:px-3 sm:py-1.5 active:scale-95 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={t('exportPdfTooltip')}
-                >
-                  <FileDown size={14} />
-                  {t('exportPdfShort')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ProblemControls
+        showResolved={showResolved}
+        onShowResolvedChange={setShowResolved}
+        resolvedCount={resolvedCount}
+        similarityThreshold={similarityThreshold}
+        onSimilarityChange={setSimilarityThreshold}
+        onExpandAll={expandAll}
+        onCollapseAll={collapseAll}
+        onExportPdf={exportPDF}
+        canExport={visibleData.length > 0}
+      />
 
       <ResolveErrorBanner show={toggleFailed} onDismiss={dismissToggleError} />
 
       {/* Problem Tree */}
-      {visibleData.length === 0 ? (
-        <EmptyProblemsState resolvedCount={resolvedCount} />
-      ) : (
-        <div className="space-y-3 sm:space-y-4">
+      <ProblemTreeArea
+        feedback={feedback}
+        isUpdating={isUpdating}
+        resolvedCount={resolvedCount}
+        isEmpty={visibleData.length === 0}
+      >
           {visibleData.map((categoryGroup) => (
             <div key={categoryGroup.category} className="card p-0 overflow-hidden">
               {/* Category Header */}
@@ -575,8 +494,8 @@ export default function ProblemAnalysis() {
               )}
             </div>
           ))}
-        </div>
-      )}
+      </ProblemTreeArea>
+      <FeedbackDetailOverlay feedback={openFeedback} onClose={() => setOpenFeedback(null)} />
     </div>
   )
 }

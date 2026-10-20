@@ -1391,28 +1391,38 @@ class TestParseCustomFieldFilters:
     """Tests for _parse_custom_field_filters() — cf_<key> query-param extraction."""
 
     def test_extracts_prefixed_params_and_strips_prefix(self):
-        from metrics_handler import _parse_custom_field_filters
+        from shared.feedback_filters import (
+            parse_custom_field_filters as _parse_custom_field_filters,
+        )
         result = _parse_custom_field_filters({'cf_region': 'EMEA', 'cf_tier': 'gold'})
-        assert result == {'region': 'EMEA', 'tier': 'gold'}
+        assert result == {'region': ('EMEA',), 'tier': ('gold',)}
 
     def test_ignores_non_prefixed_params(self):
-        from metrics_handler import _parse_custom_field_filters
+        from shared.feedback_filters import (
+            parse_custom_field_filters as _parse_custom_field_filters,
+        )
         result = _parse_custom_field_filters({'source': 'webscraper', 'days': '7', 'cf_region': 'EMEA'})
-        assert result == {'region': 'EMEA'}
+        assert result == {'region': ('EMEA',)}
 
     def test_drops_empty_and_none_values(self):
-        from metrics_handler import _parse_custom_field_filters
+        from shared.feedback_filters import (
+            parse_custom_field_filters as _parse_custom_field_filters,
+        )
         # An empty value is the UI's "no selection" — it must not filter.
         result = _parse_custom_field_filters({'cf_region': '', 'cf_tier': None, 'cf_plan': 'pro'})
-        assert result == {'plan': 'pro'}
+        assert result == {'plan': ('pro',)}
 
     def test_ignores_bare_prefix_with_empty_key(self):
-        from metrics_handler import _parse_custom_field_filters
+        from shared.feedback_filters import (
+            parse_custom_field_filters as _parse_custom_field_filters,
+        )
         result = _parse_custom_field_filters({'cf_': 'value'})
         assert result == {}
 
     def test_returns_empty_for_no_matching_params(self):
-        from metrics_handler import _parse_custom_field_filters
+        from shared.feedback_filters import (
+            parse_custom_field_filters as _parse_custom_field_filters,
+        )
         assert _parse_custom_field_filters({'days': '7'}) == {}
 
 
@@ -1420,38 +1430,52 @@ class TestItemMatchesCustomFields:
     """Tests for _item_matches_custom_fields() — the per-item AND match."""
 
     def test_matches_when_all_filters_satisfied(self):
-        from metrics_handler import _item_matches_custom_fields
+        from shared.feedback_filters import (
+            item_matches_custom_fields as _item_matches_custom_fields,
+        )
         item = {'custom_fields': {'region': 'EMEA', 'tier': 'gold'}}
         assert _item_matches_custom_fields(item, {'region': 'EMEA', 'tier': 'gold'}) is True
 
     def test_fails_when_any_filter_unsatisfied(self):
-        from metrics_handler import _item_matches_custom_fields
+        from shared.feedback_filters import (
+            item_matches_custom_fields as _item_matches_custom_fields,
+        )
         item = {'custom_fields': {'region': 'EMEA', 'tier': 'silver'}}
         assert _item_matches_custom_fields(item, {'region': 'EMEA', 'tier': 'gold'}) is False
 
     def test_matches_numeric_value_against_string_filter(self):
-        from metrics_handler import _item_matches_custom_fields
+        from shared.feedback_filters import (
+            item_matches_custom_fields as _item_matches_custom_fields,
+        )
         # Stored 5 (number) matches requested "5" (query params are strings).
         item = {'custom_fields': {'tier': 5}}
         assert _item_matches_custom_fields(item, {'tier': '5'}) is True
 
     def test_fails_when_field_missing(self):
-        from metrics_handler import _item_matches_custom_fields
+        from shared.feedback_filters import (
+            item_matches_custom_fields as _item_matches_custom_fields,
+        )
         item = {'custom_fields': {'region': 'EMEA'}}
         assert _item_matches_custom_fields(item, {'tier': 'gold'}) is False
 
     def test_fails_when_field_value_is_none(self):
-        from metrics_handler import _item_matches_custom_fields
+        from shared.feedback_filters import (
+            item_matches_custom_fields as _item_matches_custom_fields,
+        )
         item = {'custom_fields': {'region': None}}
         assert _item_matches_custom_fields(item, {'region': 'EMEA'}) is False
 
     def test_fails_when_item_has_no_custom_fields_map(self):
-        from metrics_handler import _item_matches_custom_fields
+        from shared.feedback_filters import (
+            item_matches_custom_fields as _item_matches_custom_fields,
+        )
         assert _item_matches_custom_fields({'text': 'x'}, {'region': 'EMEA'}) is False
         assert _item_matches_custom_fields({'custom_fields': None}, {'region': 'EMEA'}) is False
 
     def test_matches_everything_when_no_filters(self):
-        from metrics_handler import _item_matches_custom_fields
+        from shared.feedback_filters import (
+            item_matches_custom_fields as _item_matches_custom_fields,
+        )
         # No active custom filters → every item passes, even one with no map.
         assert _item_matches_custom_fields({'text': 'x'}, {}) is True
 

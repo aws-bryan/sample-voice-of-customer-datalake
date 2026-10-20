@@ -3,7 +3,9 @@ import { ChevronDown, ChevronRight, AlertTriangle, Lightbulb, CheckCircle2, Load
 import { useTranslation } from 'react-i18next'
 import clsx from 'clsx'
 import SentimentBadge from '../../components/SentimentBadge'
+import { EnrichmentBadges } from '../../components/EnrichmentBadges'
 import type { FeedbackItem, DateRangeParams } from '../../api/client'
+import type { FeedbackFilterState } from '../../api/feedbackFilters'
 import type { ProblemGroup } from './problemResolution'
 import { useProblemItems } from './useProblemItems'
 
@@ -13,13 +15,14 @@ function getSentimentLabel(score: number): 'positive' | 'negative' | 'neutral' {
   return 'neutral'
 }
 
-/** Window + source for the on-demand fetch of a problem's feedback rows. */
+/** Window + filters for the on-demand fetch of a problem's feedback rows. */
 export interface ProblemDrillParams {
   readonly dateParams: DateRangeParams
-  readonly source: string | null
-  /** Custom-field selections, applied to the drill-down so example rows match
-   * the same filter as the aggregated tree. */
-  readonly customFilters: Record<string, string>
+  /** The page's filters, applied to the drill-down so example rows match the
+   * same selection as the aggregated tree. */
+  readonly filters: FeedbackFilterState
+  /** Opens an example row in the detail pop-up instead of navigating away. */
+  readonly onOpenFeedback?: (item: FeedbackItem) => void
 }
 
 interface ProblemRowProps {
@@ -91,7 +94,7 @@ export function ProblemRow({
   const problemTexts = [problemGroup.problem, ...problemGroup.similarProblems]
   const drill = useProblemItems(
     drillParams.dateParams, categoryName, subcategoryName, problemTexts,
-    drillParams.source, isExpanded, drillParams.customFilters,
+    drillParams.filters, isExpanded,
   )
   return (
     <div key={problemKey} className="bg-white relative">
@@ -147,6 +150,7 @@ export function ProblemRow({
             isLoading={drill.isLoading}
             isError={drill.isError}
             problemSummary={problemGroup.problem}
+            onOpenFeedback={drillParams.onOpenFeedback}
           />
         </div>
       )}
@@ -161,8 +165,14 @@ export function ProblemRow({
  * the count badge on the row, from the server aggregate).
  */
 function ProblemItemsList({
-  items, isLoading, isError, problemSummary,
-}: Readonly<{ items: FeedbackItem[]; isLoading: boolean; isError: boolean; problemSummary: string }>) {
+  items, isLoading, isError, problemSummary, onOpenFeedback,
+}: Readonly<{
+  items: FeedbackItem[]
+  isLoading: boolean
+  isError: boolean
+  problemSummary: string
+  onOpenFeedback?: (item: FeedbackItem) => void
+}>) {
   const { t } = useTranslation('common')
   if (isLoading) {
     return (
@@ -180,7 +190,7 @@ function ProblemItemsList({
   return (
     <>
       {items.map((item) => (
-        <FeedbackItemCard key={item.feedback_id} item={item} problemSummary={problemSummary} />
+        <FeedbackItemCard key={item.feedback_id} item={item} problemSummary={problemSummary} onOpen={onOpenFeedback} />
       ))}
     </>
   )
@@ -197,12 +207,23 @@ function formatDateSafe(dateString: string | null | undefined): string {
   }
 }
 
-function FeedbackItemCard({ item, problemSummary }: Readonly<{ item: FeedbackItem; problemSummary: string }>) {
+const ITEM_CARD_CLASS = 'block w-full text-left p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors border border-gray-100'
+
+/** A link to the detail page, or a button that opens the pop-up when the page provides one. */
+function ItemCardShell({
+  item, onOpen, children,
+}: Readonly<{ item: FeedbackItem; onOpen?: (item: FeedbackItem) => void; children: React.ReactNode }>) {
+  if (onOpen) {
+    return <button type="button" onClick={() => onOpen(item)} className={ITEM_CARD_CLASS}>{children}</button>
+  }
+  return <Link to={`/feedback/${item.feedback_id}`} className={ITEM_CARD_CLASS}>{children}</Link>
+}
+
+function FeedbackItemCard({
+  item, problemSummary, onOpen,
+}: Readonly<{ item: FeedbackItem; problemSummary: string; onOpen?: (item: FeedbackItem) => void }>) {
   return (
-    <Link
-      to={`/feedback/${item.feedback_id}`}
-      className="block p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors border border-gray-100"
-    >
+    <ItemCardShell item={item} onOpen={onOpen}>
       <div className="flex items-start justify-between mb-1.5 sm:mb-2 gap-2">
         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
           <span className="text-xs font-medium text-gray-700 capitalize">
@@ -222,7 +243,8 @@ function FeedbackItemCard({ item, problemSummary }: Readonly<{ item: FeedbackIte
         <span>{formatDateSafe(item.source_created_at)}</span>
         {item.rating && <span>★ {item.rating}/5</span>}
         {item.persona_name && <span className="hidden xs:inline">{item.persona_name}</span>}
+        <EnrichmentBadges enrichment={item.enrichment} />
       </div>
-    </Link>
+    </ItemCardShell>
   )
 }

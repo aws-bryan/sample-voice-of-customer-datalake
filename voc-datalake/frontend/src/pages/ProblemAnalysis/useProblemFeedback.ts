@@ -20,8 +20,10 @@
  */
 
 import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import type { DateRangeParams } from '../../api/client'
+import { EMPTY_FEEDBACK_FILTERS, filtersKey } from '../../api/feedbackFilters'
+import type { FeedbackFilterState } from '../../api/feedbackFilters'
 import { getProblems } from '../../api/problemsApi'
 import type { ProblemLeaf } from '../../api/problemsApi'
 import { mergeLeaves } from './problemClustering'
@@ -46,6 +48,8 @@ export interface ProblemTree {
   isPartial: boolean
   /** A request failed; with no data this means nothing was read. */
   isError: boolean
+  /** The tree shown belongs to an earlier window/selection while the current one loads. */
+  isUpdating: boolean
   /** Re-fetch the window. */
   retry: () => void
 }
@@ -61,19 +65,21 @@ export function useProblemFeedback(
   dateParams: DateRangeParams,
   apiEndpoint: string,
   similarityThreshold: number,
-  source: string | null = null,
-  customFilters: Record<string, string> = {},
+  filters: FeedbackFilterState = EMPTY_FEEDBACK_FILTERS,
 ): ProblemTree {
   const query = useQuery({
-    // Keyed on window, source AND custom filters — all three change the
-    // aggregated leaves (the server applies them before bucketing). Threshold
-    // is NOT in the key: it is applied in the merge below, so the slider
-    // re-merges the cached leaves without a round trip.
-    queryKey: ['feedback-problems', dateParams, source, customFilters],
-    queryFn: () => getProblems({ ...dateParams, source: source ?? undefined, customFilters }),
+    // Keyed on window AND filters — both change the aggregated leaves (the
+    // server applies every filter before bucketing). Threshold is NOT in the
+    // key: it is applied in the merge below, so the slider re-merges the cached
+    // leaves without a round trip.
+    queryKey: ['feedback-problems', dateParams, filtersKey(filters)],
+    queryFn: () => getProblems(dateParams, filters),
     enabled: !!apiEndpoint,
     staleTime: WINDOW_STALE_MS,
     refetchOnWindowFocus: false,
+    // A filter change keeps the previous tree on screen (dimmed by the page)
+    // until the new aggregate lands, instead of dropping back to "loading".
+    placeholderData: keepPreviousData,
   })
 
   const leaves = query.data?.problems
@@ -89,6 +95,7 @@ export function useProblemFeedback(
     totalCount: query.data?.feedback_count ?? 0,
     isPartial: query.data?.is_partial ?? false,
     isError: query.isError,
+    isUpdating: query.isPlaceholderData,
     retry: () => void query.refetch(),
   }
 }

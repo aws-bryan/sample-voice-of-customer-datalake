@@ -15,8 +15,8 @@
 import { z } from 'zod'
 import { fetchApi } from './client'
 import type { DateRangeParams } from './client'
-import { toCustomFieldParams } from './customFiltersApi'
-import type { DateBasis } from './types'
+import { EMPTY_FEEDBACK_FILTERS, filteredSearchParams } from './feedbackFilters'
+import type { FeedbackFilterState } from './feedbackFilters'
 
 /** A finest-grain problem leaf, matching `_aggregate_problems` in metrics_handler.py. */
 export interface ProblemLeaf {
@@ -57,24 +57,17 @@ const responseSchema = z.object({
   problems: z.array(leafSchema).catch([]),
 })
 
-/** Fetch the server-aggregated problem leaves for the window. */
+/**
+ * Fetch the server-aggregated problem leaves for the window.
+ *
+ * Every filter dimension is a row-level post-filter the server applies BEFORE
+ * aggregation (shared/feedback_filters.py), so counts reflect the selection.
+ */
 export async function getProblems(
-  params: DateRangeParams & {
-    date_basis?: DateBasis
-    source?: string
-    /** Admin-configured custom-field selections, serialized as `cf_<key>` —
-     * row-level post-filters the server applies before aggregation. */
-    customFilters?: Record<string, string>
-  },
+  dateParams: DateRangeParams,
+  filters: FeedbackFilterState = EMPTY_FEEDBACK_FILTERS,
 ): Promise<ProblemsResponse> {
-  const { customFilters, ...rest } = params
-  const search = new URLSearchParams()
-  for (const [key, value] of Object.entries(rest)) {
-    if (value != null) search.set(key, String(value))
-  }
-  for (const [key, value] of Object.entries(toCustomFieldParams(customFilters ?? {}))) {
-    search.set(key, value)
-  }
+  const search = filteredSearchParams({ ...dateParams }, filters)
   const raw = await fetchApi<unknown>(`/feedback/problems?${search.toString()}`)
   // Drop leaves with no problem text — the server already skips rows without a
   // problem_summary, but a lenient parse could still coerce one to ''.

@@ -10,30 +10,32 @@
  * @module pages/Dashboard
  */
 
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import clsx from 'clsx'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, BarChart, Bar } from 'recharts'
 import { MessageSquare, TrendingUp, AlertTriangle, Users, Zap, FileDown } from 'lucide-react'
-import { api, getDateRangeParams } from '../../api/client'
+import { getDateRangeParams } from '../../api/client'
 import type { MetricsSummary, SentimentBreakdown, CategoryBreakdown, SourceBreakdown, FeedbackItem } from '../../api/client'
 import { useConfigStore } from '../../store/configStore'
+import { usePageFilters } from '../../store/feedbackFilterStore'
+import { filtersKey } from '../../api/feedbackFilters'
+import { FILTER_QUERY_DEBOUNCE_MS, useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { useSettledOnce } from '../../hooks/useSettledOnce'
 import MetricCard from '../../components/MetricCard'
 import FeedbackCard from '../../components/FeedbackCard'
 import SocialFeed from '../../components/SocialFeed'
+import FeedbackFilterPanel from '../../components/FeedbackFilterPanel'
+import FeedbackDetailOverlay from '../../components/FeedbackDetailOverlay'
 import { generateDashboardPDF } from './dashboardPdfGenerator'
 import { getTimeRangeLabel } from '../../utils/dateUtils'
 import { useTranslation } from 'react-i18next'
 import DashboardEmptyState from './DashboardEmptyState'
-import { useDashboardSummary } from '../../hooks/useDashboardSummary'
 import EmptyWindowBanner from '../../components/EmptyWindowBanner'
+import { useCustomFilterControls } from '../Categories/useCustomFilterControls'
+import { URGENT_PREVIEW_LIMIT, useDashboardData } from './useDashboardData'
+import type { DashboardData } from './useDashboardData'
 
 const COLORS = ['#22c55e', '#6b7280', '#ef4444', '#eab308']
-
-/**
- * How many urgent items the dashboard previews. The list is a preview, not the
- * full set — the heading reports the true total from /metrics/summary, so this
- * number must never be presented as a count.
- */
-const URGENT_PREVIEW_LIMIT = 5
 
 /**
  * Count for the "Urgent Issues (N)" heading.
@@ -268,9 +270,11 @@ interface UrgentFeedbackProps {
    * against the rendered items by `urgentHeadingCount`.
    */
   aggregateTotal: number | undefined
+  /** Opens an item in the detail pop-up. */
+  onOpen?: (item: FeedbackItem) => void
 }
 
-function UrgentFeedback({ items, aggregateTotal }: Readonly<UrgentFeedbackProps>) {
+function UrgentFeedback({ items, aggregateTotal, onOpen }: Readonly<UrgentFeedbackProps>) {
   const hasItems = items && items.length > 0
   const count = urgentHeadingCount(aggregateTotal, items?.length)
 
@@ -283,7 +287,7 @@ function UrgentFeedback({ items, aggregateTotal }: Readonly<UrgentFeedbackProps>
       {hasItems ? (
         <div className="space-y-3 max-h-[400px] sm:max-h-[600px] overflow-y-auto">
           {items.slice(0, URGENT_PREVIEW_LIMIT).map((item) => (
-            <FeedbackCard key={item.feedback_id} feedback={item} compact />
+            <FeedbackCard key={item.feedback_id} feedback={item} compact onOpen={onOpen} />
           ))}
         </div>
       ) : (
@@ -335,97 +339,72 @@ function buildPDFExportData(input: PDFExportInput) {
   }
 }
 
-export default function Dashboard() {
+/**
+ * A filtered window with no rows. When the scan itself FAILED the counts are
+ * unknown, so say that (with a retry) instead of claiming nothing matches.
+ */
+function FilteredEmptyState({ loadFailed, onRetry }: Readonly<{ loadFailed: boolean; onRetry: () => void }>) {
   const { t } = useTranslation('common')
-  const { timeRange, customDays, dateBasis, config } = useConfigStore()
-  const dateParams = getDateRangeParams(timeRange, customDays, dateBasis)
-  const isConfigured = !!config.apiEndpoint
-
-  // Summary + empty-window fallback in one call (see the hook). `summary` is the
-  // fallback window's when a fallback is active, else the selected window's;
-  // `effectiveDateParams` is what the other queries below must use so they match.
-  const { summary, effectiveDateParams, fallback, isLoading: summaryLoading } =
-    useDashboardSummary(dateParams, dateBasis, config.apiEndpoint)
-
-  const { data: sentiment } = useQuery({
-    queryKey: ['sentiment', effectiveDateParams],
-    queryFn: () => api.getSentiment(effectiveDateParams),
-    enabled: isConfigured,
-  })
-
-  const { data: categories } = useQuery({
-    queryKey: ['categories', effectiveDateParams],
-    queryFn: () => api.getCategories(effectiveDateParams),
-    enabled: isConfigured,
-  })
-
-  const { data: sources } = useQuery({
-    queryKey: ['sources', effectiveDateParams],
-    queryFn: () => api.getSources(effectiveDateParams),
-    enabled: isConfigured,
-  })
-
-  // `limit` MUST stay in the query key: /feedback/urgent returns a different
-  // payload per limit, so a key that omits it lets two callers with different
-  // limits collide on one cache entry (which is how the sidebar badge used to
-  // render this list's page size).
-  const { data: urgentFeedback } = useQuery({
-    queryKey: ['urgent', effectiveDateParams, URGENT_PREVIEW_LIMIT],
-    queryFn: () => api.getUrgentFeedback({ ...effectiveDateParams, limit: URGENT_PREVIEW_LIMIT }),
-    enabled: isConfigured,
-  })
-
-  if (!isConfigured) {
-    return <NotConfiguredState />
-  }
-
-  // `summaryLoading` (from useDashboardSummary) is true while the selected window
-  // loads OR the fallback probe is resolving, so hold the loading state rather
-  // than flashing the empty prompt before a fallback can resolve.
-  if (summaryLoading) {
-    return <LoadingState />
-  }
-
-  // Genuinely no data anywhere (not just outside the selected window) → the
-  // onboarding prompt. `summary` here is the effective-window summary, so this
-  // only fires when even the most-recent-data window is empty, i.e. the fallback
-  // found nothing to show.
-  if ((summary?.total_feedback ?? 0) === 0) {
-    return <DashboardEmptyState />
-  }
-
-  const sourcesCount = Object.keys(sources?.sources || {}).length
-
-  const exportPDF = () => {
-    try {
-      generateDashboardPDF(buildPDFExportData({
-        summary,
-        sentiment,
-        categories,
-        sources,
-        urgentFeedback,
-        timeRange: getTimeRangeLabel(timeRange, customDays, dateBasis),
-        sourcesCount,
-      }))
-    } catch {
-      // PDF generation is best-effort (e.g. popup blocked)
-    }
-  }
-
-  return (
-    <div className="space-y-4 sm:space-y-6">
-      {fallback ? <EmptyWindowBanner date={fallback.latestDate} /> : null}
-      <div className="flex justify-end">
-        <button
-          onClick={exportPDF}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
-          title={t('exportPdfTooltip')}
-        >
-          <FileDown size={14} />
-          {t('exportPdf')}
+  if (loadFailed) {
+    return (
+      <div className="card text-center py-10" role="alert">
+        <p className="text-gray-700 font-medium">{t('feedbackFilters.loadFailed')}</p>
+        <button type="button" onClick={onRetry} className="btn btn-secondary text-sm mt-3">
+          {t('feedbackFilters.retry')}
         </button>
       </div>
+    )
+  }
+  return (
+    <div className="card text-center py-10" role="status">
+      <p className="text-gray-700 font-medium">{t('feedbackFilters.noMatches')}</p>
+      <p className="text-sm text-gray-500 mt-1">{t('feedbackFilters.noMatchesHint')}</p>
+    </div>
+  )
+}
 
+function ExportPdfButton({ onExport }: Readonly<{ onExport: () => void }>) {
+  const { t } = useTranslation('common')
+  return (
+    <button
+      onClick={onExport}
+      className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 whitespace-nowrap"
+      title={t('exportPdfTooltip')}
+    >
+      <FileDown size={14} />
+      {t('exportPdf')}
+    </button>
+  )
+}
+
+interface DashboardContentProps {
+  readonly data: DashboardData
+  readonly isEmpty: boolean
+  /** Showing an earlier selection's results while the current one loads. */
+  readonly isUpdating: boolean
+  readonly onOpenFeedback: (item: FeedbackItem) => void
+}
+
+/**
+ * Everything under the filter panel. Re-queries render HERE, never by replacing
+ * the page, so the panel stays mounted (open, focused) across several changes.
+ */
+function DashboardContent({ data, isEmpty, isUpdating, onOpenFeedback }: DashboardContentProps) {
+  // An empty earlier result is no answer for the new selection: wait for it.
+  if (data.isLoading || (isEmpty && isUpdating)) return <LoadingState />
+  if (isEmpty) return <FilteredEmptyState loadFailed={data.loadFailed} onRetry={data.retry} />
+  return (
+    <div aria-busy={isUpdating} className={clsx('space-y-4 sm:space-y-6 transition-opacity', isUpdating && 'opacity-60')}>
+      <DashboardBody data={data} onOpenFeedback={onOpenFeedback} />
+    </div>
+  )
+}
+
+function DashboardBody({ data, onOpenFeedback }: Readonly<{ data: DashboardData; onOpenFeedback: (item: FeedbackItem) => void }>) {
+  const { summary, sentiment, categories, sources } = data
+  const sourcesCount = Object.keys(sources?.sources || {}).length
+  return (
+    <>
       <MetricsGrid summary={summary} sourcesCount={sourcesCount} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
@@ -446,8 +425,76 @@ export default function Dashboard() {
           </h3>
           <SocialFeed limit={8} showFilters={true} />
         </div>
-        <UrgentFeedback items={urgentFeedback?.items} aggregateTotal={summary?.urgent_count} />
+        <UrgentFeedback items={data.urgentItems} aggregateTotal={summary?.urgent_count} onOpen={onOpenFeedback} />
       </div>
+    </>
+  )
+}
+
+export default function Dashboard() {
+  const { timeRange, customDays, dateBasis, config } = useConfigStore()
+  const dateParams = getDateRangeParams(timeRange, customDays, dateBasis)
+  const { filters, setFilters } = usePageFilters('dashboard')
+  const [openFeedback, setOpenFeedback] = useState<FeedbackItem | null>(null)
+  // The panel shows `filters` instantly; the queries follow once the user pauses,
+  // so several quick changes cost one scan.
+  const queryFilters = useDebouncedValue(filters, FILTER_QUERY_DEBOUNCE_MS)
+  const data = useDashboardData(dateParams, dateBasis, config.apiEndpoint, queryFilters)
+  const settled = useSettledOnce(data.isLoading)
+  const customFilterControls = useCustomFilterControls(config.apiEndpoint)
+  const isUpdating = data.isUpdating || filtersKey(filters) !== filtersKey(queryFilters)
+
+  if (!config.apiEndpoint) {
+    return <NotConfiguredState />
+  }
+
+  // Full-page spinner for the FIRST load only (the selected window, the fallback
+  // probe, or a remembered filter's first scan), so the empty prompt never
+  // flashes first. Later loads render inside DashboardContent.
+  if (!settled) {
+    return <LoadingState />
+  }
+
+  const isEmpty = (data.summary?.total_feedback ?? 0) === 0
+  // Genuinely no data anywhere → the onboarding prompt. A filtered window that
+  // matches nothing keeps the page (and its panel) so the filters can be changed.
+  if (isEmpty && !data.isFiltered && !data.isLoading && !isUpdating) {
+    return <DashboardEmptyState />
+  }
+
+  const exportPDF = () => {
+    try {
+      generateDashboardPDF(buildPDFExportData({
+        summary: data.summary,
+        sentiment: data.sentiment,
+        categories: data.categories,
+        sources: data.sources,
+        urgentFeedback: { items: data.urgentItems },
+        timeRange: getTimeRangeLabel(timeRange, customDays, dateBasis),
+        sourcesCount: Object.keys(data.sources?.sources || {}).length,
+      }))
+    } catch {
+      // PDF generation is best-effort (e.g. popup blocked)
+    }
+  }
+
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      {data.fallback ? <EmptyWindowBanner date={data.fallback.latestDate} /> : null}
+      <FeedbackFilterPanel
+        filters={filters}
+        onChange={setFilters}
+        options={{
+          sources: Object.keys(data.optionCounts.sources),
+          categories: Object.keys(data.optionCounts.categories),
+        }}
+        counts={data.optionCounts}
+        customFilterControls={customFilterControls}
+        trailing={<ExportPdfButton onExport={exportPDF} />}
+        isUpdating={isUpdating}
+      />
+      <DashboardContent data={data} isEmpty={isEmpty} isUpdating={isUpdating} onOpenFeedback={setOpenFeedback} />
+      <FeedbackDetailOverlay feedback={openFeedback} onClose={() => setOpenFeedback(null)} />
     </div>
   )
 }
