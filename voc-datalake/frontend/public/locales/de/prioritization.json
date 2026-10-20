@@ -7,7 +7,7 @@
     "savingMobile": "..."
   },
   "ballot": {
-    "anonymousNotice": "Ihre Stimme ist anonym: Sie zählt für die Teambewertung dieses Dokuments, wird aber weder Ihnen noch jemand anderem zugeordnet.",
+    "anonymousNotice": "Ihre Stimme zählt für die Teambewertung dieses Vorschlags. Sie ist an kein Konto gebunden, und Ihr Name wird nur gespeichert, wenn Sie unten einen eingeben.",
     "axes": {
       "confidence": "Zuversicht",
       "confidenceHint": "Wie sicher sind Sie sich bei den beiden Schätzungen oben?",
@@ -28,7 +28,7 @@
       "unknown": "Ihre Stimme konnte gerade nicht erfasst werden. Versuchen Sie es in einem Moment erneut."
     },
     "displayName": {
-      "hint": "Optional. Stimmen werden keiner Person zugeordnet, Sie können das Feld also leer lassen.",
+      "hint": "Optional. Wenn Sie einen Namen eingeben, wird er mit Ihrer Stimme gespeichert; in der Teambewertung wird er nicht angezeigt. Lassen Sie das Feld leer, um ohne Namen abzustimmen.",
       "label": "Ihr Name (optional)"
     },
     "done": {
@@ -49,6 +49,7 @@
       "pending": "Wird gesendet..."
     },
     "title": "Diesen Vorschlag bewerten",
+    "titleInactive": "Abstimmung zum Vorschlag",
     "unavailable": {
       "description": "Es wurde nichts gesendet. Laden Sie die Seite neu, um es erneut zu versuchen — die Abstimmung selbst kann durchaus offen sein.",
       "title": "Diese Abstimmung konnte nicht geladen werden"
@@ -76,7 +77,7 @@
     "saving": "Speichern...",
     "title": "Was diese Zeile enthält"
   },
-  "configureApiEndpoint": "Konfigurieren Sie den API-Endpunkt in den Einstellungen, um die Priorisierung anzuzeigen.",
+  "configureApiEndpoint": "Konfigurieren Sie den API-Endpunkt unter Administration → Allgemein, um die Priorisierung anzuzeigen.",
   "docType": {
     "prd": "PRD",
     "prfaq": "PR/FAQ"
@@ -134,12 +135,16 @@
     "none": "Nicht bewertet"
   },
   "roomVote": {
-    "anonymousNote": "Hier abgegebene Stimmen zählen für die Teambewertung oben und werden keiner Person zugeordnet.",
+    "anonymousNote": "Hier abgegebene Stimmen zählen für die Teambewertung oben. Sie sind an kein Konto gebunden; ein Name wird nur gespeichert, wenn die abstimmende Person einen eingibt, und er wird hier nicht angezeigt.",
     "ballotsIn": "{{received}} von {{cap}} Stimmen eingegangen",
+    "checking": "Es wird geprüft, ob bereits eine Abstimmung läuft...",
     "close": "Abstimmung schließen",
     "closeFailed": "Die Abstimmung konnte nicht geschlossen werden. Versuchen Sie es erneut — bis sie geschlossen ist, werden weiterhin Stimmen angenommen.",
     "closed": "Diese Abstimmung ist geschlossen. Weitere Stimmen werden nicht angenommen.",
     "closing": "Wird geschlossen...",
+    "confirmMessage": "Dadurch werden ein öffentlicher Link und ein QR-Code für „{{title}}“ erstellt. Jeder mit dem Link kann ohne Anmeldung eine Stimme abgeben, bis Sie die Abstimmung schließen oder sie abläuft.",
+    "confirmOpen": "Abstimmung öffnen",
+    "confirmTitle": "Öffentliche Raumabstimmung öffnen?",
     "description": "Zeigen Sie einen QR-Code auf dem Bildschirm und lassen Sie alle im Raum ohne Konto eine anonyme Stimme vom Telefon abgeben.",
     "expired": "Diese Abstimmung ist abgelaufen. Weitere Stimmen werden nicht angenommen.",
     "open": "Raumabstimmung öffnen",
@@ -198,7 +203,8 @@
     "timeToMarketDescription": "Wie schnell kann dies geliefert werden?",
     "title": "Priorisierungsbewertungen",
     "wholeRow": "Ein Stimmzettel für alle {{documents}} Dokumente dieser Zeile.",
-    "yoursOnly": "Ihre eigene Bewertung. Beim Speichern werden nur Ihre Werte geschrieben."
+    "yoursOnly": "Ihre eigene Bewertung. Beim Speichern werden nur Ihre Werte geschrieben.",
+    "valueOfMax": "{{value}} von {{max}}"
   },
   "scoresUnavailable": {
     "description": "Ihre gespeicherten Bewertungen sind derzeit nicht verfügbar. Die unten angezeigten Zahlen sind daher Standardwerte und nicht die eingegebenen Werte. Laden Sie die Seite vor dem Speichern neu.",
@@ -212,7 +218,7 @@
     "label": "Sortieren nach:",
     "priority": "Priorität",
     "priorityFull": "Prioritätswert",
-    "teamOrdered": "{{fields}} sortieren nach den Zahlen des Teams, die in jeder Zeile angezeigt werden – nicht nach Ihrer eigenen Bewertung.",
+    "teamOrdered": "{{fields}} sortieren nach dem Teamdurchschnitt – der Zahl, die jede Zeile zeigt –, nicht nach Ihren eigenen Werten.",
     "ttm": "MeZ",
     "ttmFull": "Markteinführungszeit"
   },
@@ -241,10 +247,11 @@
     "unavailableDescription": "Die Bewertungen des Teams konnten gerade nicht gelesen werden. Diese Zeile zeigt daher nichts darüber an — nicht, dass niemand abgestimmt hat. Laden Sie die Seite neu, um zu sehen, was das Team gesagt hat."
   },
   "title": "Priorisierung",
-  "unsavedChanges": {
-    "cancel": "Auf Seite bleiben",
-    "confirm": "Änderungen verwerfen",
-    "message": "Sie haben ungespeicherte Priorisierungsbewertungen. Möchten Sie Ihre Änderungen verwerfen und diese Seite verlassen?",
-    "title": "Ungespeicherte Änderungen"
+  "explainer": {
+    "title": "So wird bewertet",
+    "score": "Jede Person bewertet vier Punkte von 1 bis 5. Der Prioritätswert gewichtet sie: Wirkung 40 %, Time-to-Market 30 %, strategische Passung 20 %, Zuversicht 10 %.",
+    "team": "Jede Zeile zeigt den Teamdurchschnitt aller, die sie bewertet haben, und wie viele es waren. Ihre eigenen Werte sind die Schieberegler in der Zeile.",
+    "lineageTitle": "Was die Kennzeichnung einer Zeile bedeutet",
+    "rowNote": "{{label}} – erklärt unter „So wird bewertet“ über der Liste."
   }
 }

@@ -29,7 +29,8 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { api } from '../../api/client'
-import type { DateRangeParams, FeedbackItem } from '../../api/client'
+import type { DateRangeParams } from '../../api/client'
+import type { FeedbackItem } from '../../api/types'
 import { FEEDBACK_PAGE_LIMIT, nextPageOffset } from '../../api/feedbackPagination'
 import type { FeedbackPage } from '../../api/feedbackPagination'
 
@@ -48,7 +49,7 @@ export const MAX_AUTO_PAGES = 20
  * How long a loaded window counts as fresh — longer than the app-wide 30s
  * default because re-walking costs one request per 100 rows.
  */
-export const WINDOW_STALE_MS = 5 * 60 * 1000
+const WINDOW_STALE_MS = 5 * 60 * 1000
 
 export interface ProblemFeedback {
   /** Every row loaded so far, across pages. */
@@ -72,6 +73,27 @@ export interface ProblemFeedback {
   retry: () => void
 }
 
+/** Rows in one page, however the response reported them. */
+function rowsIn(page: FeedbackPage): number {
+  return page.count ?? page.items?.length ?? 0
+}
+
+/**
+ * The next offset to read. Beyond {@link nextPageOffset}: a page that says its
+ * window was capped (`is_partial_window`) and still brought rows is followed
+ * too, because `/feedback` sizes its candidate window from `offset + limit` —
+ * asking past the reported `total` is how a wide window (30 days) gets read
+ * beyond its first 200 rows, so it never shows fewer reviews than a shorter
+ * one. An empty page stops the walk (the server could read no further), and
+ * {@link MAX_AUTO_PAGES} bounds it outright.
+ */
+function nextProblemPageOffset(lastPage: FeedbackPage, allPages: readonly FeedbackPage[]): number | undefined {
+  const next = nextPageOffset(lastPage, allPages)
+  if (next !== undefined) return next
+  if (lastPage.is_partial_window !== true || rowsIn(lastPage) === 0) return undefined
+  return allPages.reduce((sum, page) => sum + rowsIn(page), 0)
+}
+
 export function useProblemFeedback(
   dateParams: DateRangeParams,
   apiEndpoint: string
@@ -81,7 +103,7 @@ export function useProblemFeedback(
     queryFn: ({ pageParam }) =>
       api.getFeedback({ ...dateParams, limit: FEEDBACK_PAGE_LIMIT, offset: pageParam }),
     initialPageParam: 0,
-    getNextPageParam: nextPageOffset,
+    getNextPageParam: nextProblemPageOffset,
     enabled: !!apiEndpoint,
     // A walk is one request per 100 rows, and TanStack refetches EVERY page of
     // an infinite query — so the app-wide 30s `staleTime` plus the default

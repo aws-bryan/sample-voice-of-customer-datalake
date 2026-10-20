@@ -18,7 +18,7 @@ function makeProps(overrides: Partial<CategoriesPDFProps> = {}): CategoriesPDFPr
 describe('CategoriesPDFContent', () => {
   it('renders category names from categoryData', () => {
     render(<CategoriesPDFContent {...makeProps()} />)
-    expect(screen.getByText('delivery')).toBeInTheDocument()
+    expect(screen.getByText('Delivery')).toBeInTheDocument()
   })
 
   it('renders keyword cloud words', () => {

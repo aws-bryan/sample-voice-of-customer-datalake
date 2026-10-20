@@ -53,7 +53,7 @@ describe('MetricCard', () => {
   })
 
   describe('icon and color themes', () => {
-    it('renders icon with blue color theme by default', () => {
+    it('renders icon with the accent tone by default', () => {
       render(
         <MetricCard 
           title="Messages" 
@@ -63,49 +63,49 @@ describe('MetricCard', () => {
       )
       
       const iconContainer = screen.getByTestId('icon').parentElement
-      expect(iconContainer).toHaveClass('bg-blue-50', 'text-blue-600')
+      expect(iconContainer).toHaveClass('bg-accent-subtle', 'text-accent')
     })
 
-    it('renders icon with green color theme', () => {
+    it('renders icon with the ok tone', () => {
       render(
         <MetricCard 
           title="Positive" 
           value={80} 
           icon={<MessageSquare data-testid="icon" />}
-          color="green"
+          color="ok"
         />
       )
       
       const iconContainer = screen.getByTestId('icon').parentElement
-      expect(iconContainer).toHaveClass('bg-green-50', 'text-green-600')
+      expect(iconContainer).toHaveClass('bg-ok-subtle', 'text-ok')
     })
 
-    it('renders icon with red color theme', () => {
+    it('renders icon with the danger tone', () => {
       render(
         <MetricCard 
           title="Urgent" 
           value={5} 
           icon={<MessageSquare data-testid="icon" />}
-          color="red"
+          color="danger"
         />
       )
       
       const iconContainer = screen.getByTestId('icon').parentElement
-      expect(iconContainer).toHaveClass('bg-red-50', 'text-red-600')
+      expect(iconContainer).toHaveClass('bg-danger-subtle', 'text-danger')
     })
 
-    it('renders icon with orange color theme', () => {
+    it('renders icon with the warn tone', () => {
       render(
         <MetricCard 
           title="Pending" 
           value={12} 
           icon={<MessageSquare data-testid="icon" />}
-          color="orange"
+          color="warn"
         />
       )
       
       const iconContainer = screen.getByTestId('icon').parentElement
-      expect(iconContainer).toHaveClass('bg-orange-50', 'text-orange-600')
+      expect(iconContainer).toHaveClass('bg-warn-subtle', 'text-warn')
     })
 
     it('renders without icon when not provided', () => {
@@ -131,5 +131,32 @@ describe('MetricCard', () => {
       expect(value).not.toHaveAttribute('title')
       expect(value).not.toHaveAttribute('aria-label')
     })
+  })
+})
+
+// Owner request (wave 4): tiles showed "1,2…", "Bal…", "Averag…" at 1024 px and
+// in de/fr/pt. Nothing in a tile may be cut off: it wraps instead.
+describe('MetricCard never cuts its text', () => {
+  it.each([
+    ['label', 'Durchschnittliche Stimmung'],
+    ['value', 'Ausgeglichen'],
+    ['detail', '42 % positiv · +0.12'],
+  ])('the %s wraps instead of truncating', (_part, text) => {
+    render(<MetricCard title="Durchschnittliche Stimmung" value="Ausgeglichen" detail="42 % positiv · +0.12" />)
+    const element = screen.getByText(text)
+    expect(element).toHaveClass('break-words')
+    expect(element).not.toHaveClass('truncate')
+  })
+
+  it('is a size container whose decorative icon only shows in a wide tile', () => {
+    const { container } = render(<MetricCard title="Reviews" value={1247} icon={<MessageSquare data-testid="icon" />} />)
+    expect(container.firstElementChild).toHaveClass('@container', '!p-0')
+    expect(container.firstElementChild?.firstElementChild).toHaveClass('p-3', '@[16rem]:p-6')
+    expect(screen.getByTestId('icon').parentElement).toHaveClass('hidden', '@[12rem]:block')
+  })
+
+  it('never sets the value below 18 px (text-lg) in a narrow tile', () => {
+    render(<MetricCard title="Reviews" value={1247} />)
+    expect(screen.getByText('1247')).toHaveClass('text-lg', '@[13rem]:text-2xl')
   })
 })

@@ -1,3 +1,4 @@
+import { byCodeUnit } from './compare';
 /**
  * Shared staging excludes for Lambda `Code.fromAsset(...)` bundles
  * (issues #194/#201 follow-ups, #203).
@@ -49,6 +50,26 @@ export const PY_LAMBDA_ASSET_EXCLUDES = [
   '/layers/',
   // Node.js streaming Lambda — bundled separately by NodejsFunction
   '/stream/',
+  // The email inbox worker — bundled on its own (lib/stacks/email-intake.ts re-includes it)
+  '/email_intake/',
+];
+
+/**
+ * The worker trees VocProcessingStack bundles on their own (memory
+ * extraction/scanning/retention, the autonomous-agent runtime, the morning
+ * brief). Every OTHER `fromAsset('lambda')` site spreads this so an edit under
+ * lambda/memory/, lambda/agents/ or lambda/briefing/ does not redeploy the ~25
+ * unrelated functions; each worker bundle excludes only the OTHER trees (see
+ * lib/utils/worker-lambda.ts).
+ */
+export const WORKER_TREE_ASSET_EXCLUDES = ['/agents/', '/briefing/', '/memory/'];
+
+/**
+ * Provider-only source must not churn every API/job Lambda rooted at `lambda/`.
+ * The provider bundle intentionally omits this exclusion so its own edits deploy.
+ */
+export const VERIFICATION_FIXTURE_PROVIDER_ASSET_EXCLUDES = [
+  '/api/verification_fixture_provider.py',
 ];
 
 /**
@@ -102,18 +123,21 @@ export function rootPluginAssetExcludes(pluginId: string, allPluginIds: string[]
     '/Workshop/',
     '/plugins/_template/',
     // lambda/: only shared/ ships in ingestor bundles.
+    '/lambda/agents/',
     '/lambda/aggregator/',
     '/lambda/api/',
     '/lambda/custom_resources/',
+    '/lambda/email_intake/',
     '/lambda/jobs/',
     '/lambda/layers/',
+    '/lambda/memory/',
     '/lambda/processor/',
     '/lambda/research/',
     '/lambda/stream/',
     // Sibling plugins: their edits must not churn THIS plugin's hash.
     ...allPluginIds
       .filter((id) => id !== pluginId)
-      .sort()
+      .sort(byCodeUnit)
       .map((id) => `/plugins/${id}/`),
   ];
 }

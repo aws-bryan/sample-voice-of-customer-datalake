@@ -9,7 +9,7 @@
  *
  * What this hook does NOT own, deliberately:
  * - **Whether the step is available.** That is `overviewState`'s
- *   `steps.prototype.missingUpstream` (no PRD and no PR-FAQ), derived in one place
+ *   `steps.prototype.missingUpstream` (no PRD and no PR/FAQ), derived in one place
  *   for the card's disabled state. `runBuild` re-checks it as a guard rather than
  *   as the source of truth, so calling this hook from a control that forgot to
  *   disable itself cannot start a sourceless build.
@@ -19,7 +19,7 @@
  *   await-in-component version reported a still-running build as failed at the
  *   five-minute mark. Only a failure to *start* surfaces here.
  *
- * The backend references the project's latest PRD *and* PR-FAQ: both if both
+ * The backend references the project's latest PRD *and* PR/FAQ: both if both
  * exist, otherwise whichever one does. So one document is enough to build, and
  * when only one is present the user is told which before it runs.
  */
@@ -131,7 +131,7 @@ export interface PrototypeBuildControl {
    * flag-and-list pair, and the visual list (which has no flag — see
    * `selectedVisualIds`).
    *
-   * These live in the build wizard, beside the PRD/PR-FAQ pickers, so one panel
+   * These live in the build wizard, beside the PRD/PR/FAQ pickers, so one panel
    * answers the whole "what should this build read?" question and the card keeps
    * the single button its five siblings have.
    *
@@ -363,7 +363,7 @@ export function usePrototypeBuild({
     ))
   }, [visualOptions])
 
-  // THREE things worth saying before a build runs: only one of PRD/PR-FAQ exists, a
+  // THREE things worth saying before a build runs: only one of PRD/PR/FAQ exists, a
   // prototype already does (so this one costs money for a duplicate), or a type has
   // several documents so "the latest" is a decision. Null means none applies.
   //
@@ -377,7 +377,7 @@ export function usePrototypeBuild({
   // Only the *start* call is reported here.
   const runBuild = useCallback(async () => {
     // Not reachable through the card, which is disabled on the same condition —
-    // but a build with no PRD and no PR-FAQ has no source, so refuse rather than
+    // but a build with no PRD and no PR/FAQ has no source, so refuse rather than
     // queue a job that can only fail. Verified load-bearing: with the card's
     // disabled state removed, this is the only thing that still stops a billable
     // build with nothing to build from.

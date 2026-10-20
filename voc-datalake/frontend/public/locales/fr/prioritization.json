@@ -7,7 +7,7 @@
     "savingMobile": "..."
   },
   "ballot": {
-    "anonymousNotice": "Votre vote est anonyme : il compte dans le score de l'équipe pour ce document, mais il n'est attribué ni à vous ni à personne d'autre.",
+    "anonymousNotice": "Votre bulletin compte dans le score d’équipe de cette proposition. Il n’est lié à aucun compte, et votre nom n’est enregistré que si vous en saisissez un ci-dessous.",
     "axes": {
       "confidence": "Confiance",
       "confidenceHint": "Quelle est votre certitude sur les deux estimations ci-dessus ?",
@@ -28,7 +28,7 @@
       "unknown": "Votre bulletin n'a pas pu être enregistré pour l'instant. Réessayez dans un moment."
     },
     "displayName": {
-      "hint": "Facultatif. Les bulletins ne sont attribués à personne, vous pouvez donc laisser ce champ vide.",
+      "hint": "Facultatif. Si vous saisissez un nom, il est enregistré avec votre bulletin ; il n’apparaît pas dans le score d’équipe. Laissez vide pour voter sans nom.",
       "label": "Votre nom (facultatif)"
     },
     "done": {
@@ -49,6 +49,7 @@
       "pending": "Envoi..."
     },
     "title": "Notez cette proposition",
+    "titleInactive": "Vote sur la proposition",
     "unavailable": {
       "description": "Rien n'a été envoyé. Rechargez la page pour réessayer : le vote lui-même est peut-être bien ouvert.",
       "title": "Ce vote n'a pas pu être chargé"
@@ -76,7 +77,7 @@
     "saving": "Enregistrement...",
     "title": "Ce que contient cette ligne"
   },
-  "configureApiEndpoint": "Configurez le point de terminaison API dans les paramètres pour afficher la priorisation.",
+  "configureApiEndpoint": "Configurez le point de terminaison API dans Administration → Général pour afficher la priorisation.",
   "docType": {
     "prd": "PRD",
     "prfaq": "PR/FAQ"
@@ -134,12 +135,16 @@
     "none": "Non évalué"
   },
   "roomVote": {
-    "anonymousNote": "Les bulletins déposés ici comptent dans le score d'équipe ci-dessus et ne sont attribués à personne.",
+    "anonymousNote": "Les bulletins déposés ici comptent dans le score d’équipe ci-dessus. Ils ne sont liés à aucun compte ; un nom n’est enregistré que si la personne qui vote en saisit un, et il n’est pas affiché ici.",
     "ballotsIn": "{{received}} bulletins sur {{cap}} reçus",
+    "checking": "Vérification d’un vote déjà ouvert...",
     "close": "Clore le vote",
     "closeFailed": "Le vote n'a pas pu être clos. Réessayez : jusqu'à sa clôture, les bulletins sont encore acceptés.",
     "closed": "Ce vote est clos. Aucun autre bulletin n'est accepté.",
     "closing": "Clôture...",
+    "confirmMessage": "Cela crée un lien public et un code QR pour « {{title}} ». Toute personne disposant du lien peut déposer un bulletin, sans se connecter, jusqu’à ce que vous clôturiez le vote ou qu’il expire.",
+    "confirmOpen": "Ouvrir le vote",
+    "confirmTitle": "Ouvrir un vote public en salle ?",
     "description": "Affichez un QR code et laissez chaque personne présente envoyer un bulletin anonyme depuis son téléphone, sans compte.",
     "expired": "Ce vote a expiré. Aucun autre bulletin n'est accepté.",
     "open": "Ouvrir un vote en salle",
@@ -198,7 +203,8 @@
     "timeToMarketDescription": "À quelle vitesse cela peut-il être livré ?",
     "title": "Scores de priorisation",
     "wholeRow": "Un seul bulletin pour les {{documents}} documents de cette ligne.",
-    "yoursOnly": "Votre propre note. L'enregistrement n'écrit que vos valeurs."
+    "yoursOnly": "Votre propre note. L'enregistrement n'écrit que vos valeurs.",
+    "valueOfMax": "{{value}} sur {{max}}"
   },
   "scoresUnavailable": {
     "description": "Vos scores enregistrés sont actuellement indisponibles : les valeurs ci-dessous sont donc des valeurs par défaut et non celles qui ont été saisies. Rechargez la page avant d'enregistrer.",
@@ -212,7 +218,7 @@
     "label": "Trier par :",
     "priority": "Priorité",
     "priorityFull": "Score de priorité",
-    "teamOrdered": "{{fields}} trient selon les chiffres de l'équipe, ceux affichés sur chaque ligne — pas selon votre propre note.",
+    "teamOrdered": "{{fields}} trient selon la moyenne de l'équipe — le nombre affiché sur chaque ligne — et non selon vos propres notes.",
     "ttm": "DmM",
     "ttmFull": "Délai de mise sur le marché"
   },
@@ -241,10 +247,11 @@
     "unavailableDescription": "Les notes de l'équipe n'ont pas pu être lues pour le moment : cette ligne n'affiche donc rien à leur sujet — cela ne signifie pas que personne n'a voté. Rechargez la page pour voir ce que l'équipe a dit."
   },
   "title": "Priorisation",
-  "unsavedChanges": {
-    "cancel": "Rester sur la page",
-    "confirm": "Abandonner les modifications",
-    "message": "Vous avez des scores de priorisation non enregistrés. Voulez-vous abandonner vos modifications et quitter cette page ?",
-    "title": "Modifications non enregistrées"
+  "explainer": {
+    "title": "Comment c'est noté",
+    "score": "Chaque évaluateur note quatre critères de 1 à 5. Le score de priorité les pondère : impact 40 %, délai de mise sur le marché 30 %, adéquation stratégique 20 %, confiance 10 %.",
+    "team": "Chaque ligne affiche la moyenne de l'équipe parmi ceux qui l'ont notée, et leur nombre. Vos propres notes sont les curseurs dans la ligne.",
+    "lineageTitle": "Ce que signifie l'étiquette d'une ligne",
+    "rowNote": "{{label}} — expliqué dans « Comment c'est noté » au-dessus de la liste."
   }
 }

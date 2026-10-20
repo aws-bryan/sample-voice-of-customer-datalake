@@ -1,5 +1,5 @@
 {
-  "configureApi": "Please configure your API endpoint in Settings",
+  "configureApi": "Please configure your API endpoint in Administration → General",
   "filters": {
     "allCategories": "All Categories",
     "allSources": "All Sources",
@@ -14,9 +14,14 @@
     "similarity": "Similarity:",
     "similarityHigh": "High",
     "similarityLow": "Low",
-    "similarityMed": "Med",
+    "similarityMed": "Medium",
     "similarityOff": "Off",
-    "urgentOnly": "Urgent only"
+    "urgentOnly": "Urgent only",
+    "source": "Source",
+    "category": "Category",
+    "subcategory": "Subcategory",
+    "similarityHint": "Merge problems with similar wording. Low merges the most; Off lists every problem separately.",
+    "similarityLevelsHint": "How alike two problems must be to share a row. Low merges loosely similar wording (fewest rows), Medium merges close wording, High merges only near-identical wording, Off lists every problem on its own row."
   },
   "noDataHint": "Try expanding the time range or adjusting filters",
   "noDataTitle": "No problem analysis data found for the selected period",
@@ -24,12 +29,14 @@
     "categories": "Categories",
     "feedback": "Feedback",
     "loadFailed": "Could not load feedback for this window, so no counts are shown. Retry, or narrow the time range.",
-    "loadingWindow": "Loading feedback… {{loaded, number}} of {{total, number}} so far.",
-    "partialWindow": "Counts cover {{loaded, number}} of {{total, number}} items in this window.",
+    "loadingWindow": "Loading reviews… {{loaded, number}} read so far.",
+    "partialWindow": "Showing the newest {{loaded, number}} reviews of this period. To see all of them, choose a shorter period or filter by source.",
     "problems": "Problems",
     "retry": "Retry",
     "subcategories": "Subcategories",
-    "urgent": "Urgent"
+    "urgent": "Urgent",
+    "reviewsWithProblem": "Reviews with a problem",
+    "urgentReviews": "Urgent reviews"
   },
   "tree": {
     "markResolved": "Mark as resolved",
@@ -41,8 +48,16 @@
     "reviews_one": "{{count}} review",
     "reviews_other": "{{count}} reviews",
     "similar": "Similar:",
-    "sub_one": "{{count}} sub",
-    "sub_other": "{{count}} sub",
-    "unknown": "Unknown"
-  }
+    "sub_one": "{{count}} subcategory",
+    "sub_other": "{{count}} subcategories",
+    "unknown": "Unknown",
+    "urgentCount_one": "{{count}} urgent",
+    "urgentCount_other": "{{count}} urgent",
+    "similarCount_one": "+{{count}} similar",
+    "similarCount_other": "+{{count}} similar",
+    "showMoreProblems_one": "Show {{count}} more problem ({{total}} left)",
+    "showMoreProblems_other": "Show {{count}} more problems ({{total}} left)"
+  },
+  "title": "Problem Analysis",
+  "subtitle": "Recurring customer problems grouped by category, with likely root causes"
 }

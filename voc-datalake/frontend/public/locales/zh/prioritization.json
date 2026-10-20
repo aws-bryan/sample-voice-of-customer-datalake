@@ -7,7 +7,7 @@
     "savingMobile": "..."
   },
   "ballot": {
-    "anonymousNotice": "你的投票是匿名的：它会计入该文档的团队评分，但不会归属于你或任何其他人。",
+    "anonymousNotice": "你的选票会计入此提案的团队评分。它不与任何账户关联，只有你在下方填写姓名时才会保存姓名。",
     "axes": {
       "confidence": "信心",
       "confidenceHint": "你对以上两项估计有多大把握？",
@@ -28,7 +28,7 @@
       "unknown": "暂时无法记录你的投票。请稍后再试。"
     },
     "displayName": {
-      "hint": "可选。选票不会归属于任何个人，因此可以留空。",
+      "hint": "可选。填写的姓名会与你的选票一起保存，但不会显示在团队评分中。留空即可不署名投票。",
       "label": "你的姓名（可选）"
     },
     "done": {
@@ -49,6 +49,7 @@
       "pending": "正在提交..."
     },
     "title": "为该提案评分",
+    "titleInactive": "提案投票",
     "unavailable": {
       "description": "尚未提交任何内容。请重新加载页面再试——本次投票本身可能仍在进行。",
       "title": "无法加载本次投票"
@@ -76,7 +77,7 @@
     "saving": "保存中...",
     "title": "该行包含的内容"
   },
-  "configureApiEndpoint": "在设置中配置 API 端点以查看优先级排序。",
+  "configureApiEndpoint": "在“管理 → 常规”中配置 API 端点以查看优先级排序。",
   "docType": {
     "prd": "PRD",
     "prfaq": "PR/FAQ"
@@ -134,12 +135,16 @@
     "none": "未评分"
   },
   "roomVote": {
-    "anonymousNote": "在此投出的选票会计入上方的团队评分，且不会归属于任何个人。",
+    "anonymousNote": "在此投出的选票会计入上方的团队评分。选票不与任何账户关联；只有投票人填写了姓名才会保存姓名，且不会在此显示。",
     "ballotsIn": "已收到 {{received}} / {{cap}} 张选票",
+    "checking": "正在检查是否已有进行中的投票...",
     "close": "结束投票",
     "closeFailed": "无法结束投票。请重试——在结束之前仍会接受选票。",
     "closed": "本次投票已结束，不再接受新的选票。",
     "closing": "正在结束...",
+    "confirmMessage": "这会为“{{title}}”创建一个公开链接和二维码。在你结束投票或投票过期之前，任何拿到链接的人都无需登录即可投票。",
+    "confirmOpen": "开启投票",
+    "confirmTitle": "要开启公开的现场投票吗？",
     "description": "在屏幕上展示二维码，让会议室中的每个人无需账号即可用手机提交一张匿名选票。",
     "expired": "本次投票已过期，不再接受新的选票。",
     "open": "开启会场投票",
@@ -198,7 +203,8 @@
     "timeToMarketDescription": "能多快交付？",
     "title": "优先级排序评分",
     "wholeRow": "一张选票覆盖本行的全部 {{documents}} 个文档。",
-    "yoursOnly": "这是你自己的评分。保存时只会写入你的分数。"
+    "yoursOnly": "这是你自己的评分。保存时只会写入你的分数。",
+    "valueOfMax": "{{value}} / {{max}}"
   },
   "scoresUnavailable": {
     "description": "当前无法获取已保存的评分，因此下方显示的是默认值，而非任何人输入的数值。请在保存前重新加载页面。",
@@ -212,7 +218,7 @@
     "label": "排序方式：",
     "priority": "优先级",
     "priorityFull": "优先级评分",
-    "teamOrdered": "{{fields}} 按每行显示的团队数值排序，而不是按你自己的评分。",
+    "teamOrdered": "{{fields}} 按团队平均分（即每行显示的数字）排序，而不是按您自己的评分。",
     "ttm": "上市时间",
     "ttmFull": "上市时间"
   },
@@ -241,10 +247,11 @@
     "unavailableDescription": "目前无法读取团队的评分，因此本行不显示相关信息——这并不表示没有人投票。请重新加载页面以查看团队的评分。"
   },
   "title": "优先级排序",
-  "unsavedChanges": {
-    "cancel": "留在此页面",
-    "confirm": "放弃更改",
-    "message": "您有未保存的优先级排序评分。要放弃更改并离开此页面吗？",
-    "title": "未保存的更改"
+  "explainer": {
+    "title": "评分方式",
+    "score": "每位评审者为四个方面打 1 到 5 分。优先级分数按权重计算：影响 40 %、上市时间 30 %、战略契合 20 %、信心 10 %。",
+    "team": "每一行显示所有评分者的团队平均分以及评分人数。您自己的评分是行内的滑块。",
+    "lineageTitle": "行标签的含义",
+    "rowNote": "{{label}}——说明见列表上方的“评分方式”。"
   }
 }

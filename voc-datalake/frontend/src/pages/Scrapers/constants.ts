@@ -45,7 +45,9 @@ export const DEFAULT_SCRAPER: Omit<ScraperConfig, 'id'> = {
   enabled: true,
   base_url: '',
   urls: [],
-  frequency_minutes: 1440,
+  // Manual only: a new scraper does not run until someone schedules it
+  // (the industry default; it used to start daily runs on first save).
+  frequency_minutes: 0,
   extraction_method: 'css',
   container_selector: '.review',
   text_selector: '.review-text',

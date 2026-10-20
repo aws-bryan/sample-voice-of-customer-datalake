@@ -1,5 +1,5 @@
 {
-  "configureApi": "Bitte konfigurieren Sie Ihren API-Endpunkt in den Einstellungen",
+  "configureApi": "Bitte konfigurieren Sie Ihren API-Endpunkt unter Administration → Allgemein",
   "filters": {
     "allCategories": "Alle Kategorien",
     "allSources": "Alle Quellen",
@@ -16,7 +16,12 @@
     "similarityLow": "Niedrig",
     "similarityMed": "Mittel",
     "similarityOff": "Aus",
-    "urgentOnly": "Nur dringend"
+    "urgentOnly": "Nur dringend",
+    "source": "Quelle",
+    "category": "Kategorie",
+    "subcategory": "Unterkategorie",
+    "similarityHint": "Probleme mit ähnlichem Wortlaut zusammenfassen. „Niedrig“ fasst am meisten zusammen; „Aus“ listet jedes Problem einzeln.",
+    "similarityLevelsHint": "Wie ähnlich zwei Probleme sein müssen, um eine Zeile zu teilen. Niedrig fasst lose ähnliche Formulierungen zusammen (wenigste Zeilen), Mittel ähnliche Formulierungen, Hoch nur fast identische, Aus zeigt jedes Problem in einer eigenen Zeile."
   },
   "noDataHint": "Versuchen Sie, den Zeitraum zu erweitern oder die Filter anzupassen",
   "noDataTitle": "Keine Problemanalysedaten für den ausgewählten Zeitraum gefunden",
@@ -24,12 +29,14 @@
     "categories": "Kategorien",
     "feedback": "Rückmeldungen",
     "loadFailed": "Feedback für diesen Zeitraum konnte nicht geladen werden, daher werden keine Zahlen angezeigt. Erneut versuchen oder den Zeitraum eingrenzen.",
-    "loadingWindow": "Feedback wird geladen… bisher {{loaded, number}} von {{total, number}}.",
-    "partialWindow": "Die Zahlen umfassen {{loaded, number}} von {{total, number}} Einträgen in diesem Zeitraum.",
+    "loadingWindow": "Bewertungen werden geladen… bisher {{loaded, number}} gelesen.",
+    "partialWindow": "Angezeigt werden die {{loaded, number}} neuesten Bewertungen dieses Zeitraums. Um alle zu sehen, wählen Sie einen kürzeren Zeitraum oder filtern Sie nach Quelle.",
     "problems": "Probleme",
     "retry": "Erneut versuchen",
     "subcategories": "Unterkategorien",
-    "urgent": "Dringend"
+    "urgent": "Dringend",
+    "reviewsWithProblem": "Bewertungen mit Problem",
+    "urgentReviews": "Dringende Bewertungen"
   },
   "tree": {
     "markResolved": "Als gelöst markieren",
@@ -41,8 +48,16 @@
     "reviews_one": "{{count}} Bewertung",
     "reviews_other": "{{count}} Bewertungen",
     "similar": "Ähnlich:",
-    "sub_one": "{{count}} Unter.",
-    "sub_other": "{{count}} Unter.",
-    "unknown": "Unbekannt"
-  }
+    "sub_one": "{{count}} Unterkategorie",
+    "sub_other": "{{count}} Unterkategorien",
+    "unknown": "Unbekannt",
+    "urgentCount_one": "{{count}} dringend",
+    "urgentCount_other": "{{count}} dringend",
+    "similarCount_one": "+{{count}} ähnlich",
+    "similarCount_other": "+{{count}} ähnliche",
+    "showMoreProblems_one": "{{count}} weiteres Problem anzeigen ({{total}} übrig)",
+    "showMoreProblems_other": "{{count}} weitere Probleme anzeigen ({{total}} übrig)"
+  },
+  "title": "Problemanalyse",
+  "subtitle": "Wiederkehrende Kundenprobleme nach Kategorie gruppiert, mit wahrscheinlichen Ursachen"
 }

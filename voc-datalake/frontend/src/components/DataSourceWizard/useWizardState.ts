@@ -5,11 +5,14 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import type { ProjectPersona, ProjectDocument } from '../../api/client'
+import type { ProjectDocument } from '../../api/types'
+import type { ProjectPersona } from '../../api/projectTypes'
 import { api } from '../../api/client'
 import { useConfigStore } from '../../store/configStore'
 import { SOURCES as DEFAULT_SOURCES, CATEGORIES } from '../../constants/filters'
 import type { ContextConfig } from './types'
+import { sourceListDays } from './sourceListWindow'
+import { categoryLabel } from '../../utils/displayLabels'
 
 interface UseWizardStateProps {
   readonly personas: ReadonlyArray<ProjectPersona>
@@ -105,27 +108,32 @@ export function useWizardState({
   })
 
   const categories = useMemo(() => {
-    if (categoriesData?.categories && categoriesData.categories.length > 0) {
-      return categoriesData.categories.map(c => ({ id: c.id, name: c.name }))
+    const configured = categoriesData?.categories ?? []
+    if (configured.length > 0) {
+      return configured.map(c => ({ id: c.id, name: categoryLabel(c.name, configured) }))
     }
-    return CATEGORIES.map(c => ({ 
-      id: c, 
-      name: c.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-    }))
+    return CATEGORIES.map(c => ({ id: c, name: categoryLabel(c) }))
   }, [categoriesData])
 
+  const listDays = sourceListDays(contextConfig.days)
   useEffect(() => {
     if (!config.apiEndpoint) return
+    // The window changes with the selection, so an older, slower response must
+    // not overwrite the list for the window now selected.
+    const stale = new AbortController()
     
-    api.getSources({ days: 30 }).then(data => {
-      if (data.sources && Object.keys(data.sources).length > 0) {
-        const apiSources = Object.keys(data.sources).sort((a, b) => data.sources[b] - data.sources[a])
-        setSources(apiSources)
-      }
+    api.getSources({ days: listDays }).then(data => {
+      // Busiest source first. A response without `sources` throws here and
+      // lands in the catch below, which keeps the defaults.
+      const apiSources = Object.entries(data.sources)
+        .sort(([, a], [, b]) => b - a)
+        .map(([source]) => source)
+      if (!stale.signal.aborted && apiSources.length > 0) setSources(apiSources)
     }).catch(() => {
-      // Keep default sources on error
+      // Keep default sources on error (or on a malformed response)
     })
-  }, [config.apiEndpoint])
+    return () => { stale.abort() }
+  }, [config.apiEndpoint, listDays])
 
   const researchDocs = useMemo(() => documents.filter(d => d.document_type === 'research'), [documents])
   const otherDocs = useMemo(() => documents.filter(d => d.document_type !== 'research'), [documents])

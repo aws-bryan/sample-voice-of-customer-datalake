@@ -7,7 +7,7 @@
     "savingMobile": "..."
   },
   "ballot": {
-    "anonymousNotice": "Your ballot is anonymous: it counts toward the team's score for this document, but it is not attributed to you or to anyone else.",
+    "anonymousNotice": "Your ballot counts toward the team's score for this proposal. It is not tied to an account, and your name is saved with it only if you type one below.",
     "axes": {
       "confidence": "Confidence",
       "confidenceHint": "How certain are you about the two estimates above?",
@@ -28,7 +28,7 @@
       "unknown": "Your ballot could not be recorded just now. Try again in a moment."
     },
     "displayName": {
-      "hint": "Optional. Ballots are not attributed to a person, so you can leave this blank.",
+      "hint": "Optional. If you type a name it is saved with your ballot; it is not shown on the team score. Leave it blank to vote without one.",
       "label": "Your name (optional)"
     },
     "done": {
@@ -49,6 +49,7 @@
       "pending": "Submitting..."
     },
     "title": "Score this proposal",
+    "titleInactive": "Proposal vote",
     "unavailable": {
       "description": "Nothing was submitted. Reload the page to try again — the vote itself may well be open.",
       "title": "This vote could not be loaded"
@@ -76,7 +77,7 @@
     "saving": "Saving...",
     "title": "What this row holds"
   },
-  "configureApiEndpoint": "Configure API endpoint in Settings to view prioritization.",
+  "configureApiEndpoint": "Configure API endpoint in Administration → General to view prioritization.",
   "docType": {
     "prd": "PRD",
     "prfaq": "PR/FAQ"
@@ -134,12 +135,16 @@
     "none": "Not Scored"
   },
   "roomVote": {
-    "anonymousNote": "Ballots cast here count toward the team score above and are not attributed to a person.",
+    "anonymousNote": "Ballots cast here count toward the team score above. They are not tied to an account; a name is saved with a ballot only if the voter types one, and it is not shown here.",
     "ballotsIn": "{{received}} of {{cap}} ballots in",
+    "checking": "Checking whether a vote is already open...",
     "close": "Close the vote",
     "closeFailed": "The vote could not be closed. Try again — until it closes, ballots are still accepted.",
     "closed": "This vote is closed. No further ballots are accepted.",
     "closing": "Closing...",
+    "confirmMessage": "This creates a public link and QR code for \"{{title}}\". Anyone who has the link can submit a ballot, without signing in, until you close the vote or it expires.",
+    "confirmOpen": "Open the vote",
+    "confirmTitle": "Open a public room vote?",
     "description": "Put a QR on screen and let everyone in the room submit one anonymous ballot from their phone, without an account.",
     "expired": "This vote has expired. No further ballots are accepted.",
     "open": "Open a room vote",
@@ -198,7 +203,8 @@
     "timeToMarketDescription": "How quickly can this be delivered?",
     "title": "Prioritization Scores",
     "wholeRow": "One ballot for all {{documents}} documents on this row.",
-    "yoursOnly": "Your own ballot. Saving writes only your scores."
+    "yoursOnly": "Your own ballot. Saving writes only your scores.",
+    "valueOfMax": "{{value}} of {{max}}"
   },
   "scoresUnavailable": {
     "description": "Your saved scores are unavailable right now, so the numbers below are defaults rather than what anyone entered. Reload the page before saving.",
@@ -212,7 +218,7 @@
     "label": "Sort by:",
     "priority": "Priority",
     "priorityFull": "Priority Score",
-    "teamOrdered": "{{fields}} order by the team's numbers, the ones each row shows — not by your own ballot.",
+    "teamOrdered": "{{fields}} sort by the team's average — the number each row shows — not by your own scores.",
     "ttm": "TTM",
     "ttmFull": "Time to Market"
   },
@@ -241,10 +247,11 @@
     "unavailableDescription": "The team's scores could not be read just now, so this row shows nothing about them — not that nobody has voted. Reload the page to see what the team said."
   },
   "title": "Prioritization",
-  "unsavedChanges": {
-    "cancel": "Stay on Page",
-    "confirm": "Discard Changes",
-    "message": "You have unsaved prioritization scores. Do you want to discard your changes and leave this page?",
-    "title": "Unsaved Changes"
+  "explainer": {
+    "title": "How this is scored",
+    "score": "Each reviewer scores four things from 1 to 5. The priority score weighs them: impact 40 %, time to market 30 %, strategic fit 20 %, confidence 10 %.",
+    "team": "Each row shows the team's average over everyone who scored it, and how many did. Your own scores are the sliders inside the row.",
+    "lineageTitle": "What the label on a row means",
+    "rowNote": "{{label}} — explained in “How this is scored” above the list."
   }
 }

@@ -29,15 +29,17 @@ describe('WindowCoverageNotice', () => {
   it('reports progress while further pages are loading', () => {
     render(<WindowCoverageNotice {...complete} isLoadingMore loadedCount={200} totalCount={615} />)
 
-    expect(screen.getByText('Loading feedback… 200 of 615 so far.')).toBeInTheDocument()
+    expect(screen.getByText('Loading reviews… 200 read so far.')).toBeInTheDocument()
+    // The walk's running total is not the window's size: never "200 of 615".
+    expect(screen.queryByText(/615/)).not.toBeInTheDocument()
   })
 
-  it('says the counts undercount when the walk stopped short', () => {
+  it('says plainly that only the newest reviews are shown, and how to see more', () => {
     render(<WindowCoverageNotice {...complete} isPartial loadedCount={2000} totalCount={5000} />)
 
     // Thousands separators come from the locale, via `{{loaded, number}}`.
     expect(
-      screen.getByText('Counts cover 2,000 of 5,000 items in this window.')
+      screen.getByText('Showing the newest 2,000 reviews of this period. To see all of them, choose a shorter period or filter by source.')
     ).toBeInTheDocument()
   })
 
@@ -46,7 +48,7 @@ describe('WindowCoverageNotice', () => {
     // because the partial verdict is not final until the walk stops.
     render(<WindowCoverageNotice {...complete} isLoadingMore isPartial loadedCount={100} totalCount={900} />)
 
-    expect(screen.getByText('Loading feedback… 100 of 900 so far.')).toBeInTheDocument()
+    expect(screen.getByText('Loading reviews… 100 read so far.')).toBeInTheDocument()
     expect(screen.queryByText(/Counts cover/)).not.toBeInTheDocument()
   })
 
@@ -63,7 +65,7 @@ describe('WindowCoverageNotice', () => {
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(screen.getByText(/Loading feedback/)).toBeInTheDocument()
+    expect(screen.getByText(/Loading reviews/)).toBeInTheDocument()
   })
 
   describe('when nothing could be read', () => {
@@ -82,7 +84,7 @@ describe('WindowCoverageNotice', () => {
       render(<WindowCoverageNotice {...complete} hasFailed loadedCount={0} totalCount={0} onRetry={onRetry} />)
 
       await user.click(screen.getByRole('button', { name: 'Retry' }))
-      expect(onRetry).toHaveBeenCalledOnce()
+      expect(onRetry).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ type: 'click' }))
     })
 
     it('omits the retry control when no handler is supplied', () => {
@@ -109,7 +111,7 @@ describe('WindowCoverageNotice', () => {
       // unknown — that is the partial case, not the failure case.
       render(<WindowCoverageNotice {...complete} hasFailed isPartial loadedCount={100} totalCount={900} />)
 
-      expect(screen.getByText('Counts cover 100 of 900 items in this window.')).toBeInTheDocument()
+      expect(screen.getByText(/^Showing the newest 100 reviews of this period/)).toBeInTheDocument()
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
   })

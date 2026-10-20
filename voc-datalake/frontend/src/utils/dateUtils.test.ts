@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { safeFormatDate, getTimeRangeLabel } from './dateUtils'
+import { formatCalendarDay, formatDateTime, safeFormatDate, getTimeRangeLabel } from './dateUtils'
 
 describe('safeFormatDate', () => {
   const formatStr = 'MMM d, yyyy HH:mm'
@@ -63,12 +63,17 @@ describe('getTimeRangeLabel', () => {
     expect(getTimeRangeLabel('30d')).toBe('30 Days')
   })
 
-  it('presents the "all" token as the 90 Days preset (never the raw token)', () => {
-    expect(getTimeRangeLabel('all')).toBe('90 Days')
+  it('labels the 90d preset "90 Days" and the "all" token "All time" (never the raw token)', () => {
+    expect(getTimeRangeLabel('90d')).toBe('90 Days')
+    expect(getTimeRangeLabel('all')).toBe('All time')
   })
 
   it('formats custom ranges as "Last N days" when customDays is set', () => {
     expect(getTimeRangeLabel('custom', 14)).toBe('Last 14 days')
+  })
+
+  it('labels a custom lookback of 0 as "All time"', () => {
+    expect(getTimeRangeLabel('custom', 0)).toBe('All time')
   })
 
   it('falls back to "Custom" when custom is selected without a day count', () => {
@@ -77,7 +82,7 @@ describe('getTimeRangeLabel', () => {
   })
 
   it('falls back to the raw token for unknown values', () => {
-    expect(getTimeRangeLabel('90d')).toBe('90d')
+    expect(getTimeRangeLabel('365d')).toBe('365d')
   })
 
   it('appends the review-date note when filtering by review date', () => {
@@ -88,5 +93,39 @@ describe('getTimeRangeLabel', () => {
   it('leaves the label unchanged for the imported basis', () => {
     expect(getTimeRangeLabel('7d', null, 'imported')).toBe('7 Days')
     expect(getTimeRangeLabel('7d')).toBe('7 Days')
+  })
+})
+
+describe('formatDateTime', () => {
+  const ISO = '2026-10-18T09:05:00Z'
+
+  it('writes a date and time the way the locale does, never the raw ISO string', () => {
+    const expected = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(ISO))
+    expect(formatDateTime(ISO, 'en')).toBe(expected)
+    expect(formatDateTime(ISO, 'en')).not.toContain('T09')
+  })
+
+  it('follows the language', () => {
+    const expected = new Intl.DateTimeFormat('de', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(ISO))
+    expect(formatDateTime(ISO, 'de')).toBe(expected)
+  })
+
+  it.each([null, undefined, '', 'not a date'])('falls back for %s', (value) => {
+    expect(formatDateTime(value, 'en', '—')).toBe('—')
+  })
+})
+
+describe('formatCalendarDay', () => {
+  it('writes a day as "MMM d" on charts and "MMM d, yyyy" in lists, never ISO', () => {
+    expect(formatCalendarDay('2026-10-06', 'en', 'short')).toBe('Oct 6')
+    expect(formatCalendarDay('2026-10-06', 'en')).toBe('Oct 6, 2026')
+  })
+
+  it('keeps the calendar day whatever the time zone (no UTC shift to the day before)', () => {
+    expect(formatCalendarDay('2026-01-01', 'en')).toBe('Jan 1, 2026')
+  })
+
+  it.each(['2026-02-30', 'soon', ''])('leaves %s as it is', (value) => {
+    expect(formatCalendarDay(value, 'en')).toBe(value)
   })
 })

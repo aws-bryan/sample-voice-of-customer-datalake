@@ -1,5 +1,5 @@
 {
-  "configureApi": "Veuillez configurer votre endpoint API dans les Paramètres",
+  "configureApi": "Veuillez configurer votre endpoint API dans Administration → Général",
   "filters": {
     "allCategories": "Toutes les catégories",
     "allSources": "Toutes les sources",
@@ -14,9 +14,14 @@
     "similarity": "Similarité :",
     "similarityHigh": "Élevé",
     "similarityLow": "Faible",
-    "similarityMed": "Moyen",
+    "similarityMed": "Moyenne",
     "similarityOff": "Désactivé",
-    "urgentOnly": "Urgents uniquement"
+    "urgentOnly": "Urgents uniquement",
+    "source": "Source",
+    "category": "Catégorie",
+    "subcategory": "Sous-catégorie",
+    "similarityHint": "Fusionne les problèmes formulés de façon similaire. Bas fusionne le plus ; Désactivé liste chaque problème séparément.",
+    "similarityLevelsHint": "À quel point deux problèmes doivent se ressembler pour partager une ligne. Faible regroupe des formulations vaguement proches (moins de lignes), Moyenne des formulations proches, Élevée seulement les quasi identiques, Désactivée affiche chaque problème sur sa propre ligne."
   },
   "noDataHint": "Essayez d'élargir la plage de temps ou d'ajuster les filtres",
   "noDataTitle": "Aucune donnée d'analyse de problèmes trouvée pour la période sélectionnée",
@@ -24,12 +29,14 @@
     "categories": "Catégories",
     "feedback": "Retours",
     "loadFailed": "Impossible de charger les retours pour cette période, aucun décompte n’est affiché. Réessayez ou réduisez la plage de dates.",
-    "loadingWindow": "Chargement des retours… {{loaded, number}} sur {{total, number}} pour l’instant.",
-    "partialWindow": "Les décomptes couvrent {{loaded, number}} éléments sur {{total, number}} dans cette période.",
+    "loadingWindow": "Chargement des avis… {{loaded, number}} lus pour l’instant.",
+    "partialWindow": "Affichage des {{loaded, number}} avis les plus récents de cette période. Pour tous les voir, choisissez une période plus courte ou filtrez par source.",
     "problems": "Problèmes",
     "retry": "Réessayer",
     "subcategories": "Sous-catégories",
-    "urgent": "Prioritaire"
+    "urgent": "Prioritaire",
+    "reviewsWithProblem": "Avis signalant un problème",
+    "urgentReviews": "Avis urgents"
   },
   "tree": {
     "markResolved": "Marquer comme résolu",
@@ -43,9 +50,20 @@
     "reviews_many": "{{count}} avis",
     "reviews_other": "{{count}} avis",
     "similar": "Similaires :",
-    "sub_one": "{{count}} sous",
-    "sub_many": "{{count}} sous",
-    "sub_other": "{{count}} sous",
-    "unknown": "Inconnu"
-  }
+    "sub_one": "{{count}} sous-catégorie",
+    "sub_many": "{{count}} sous-catégories",
+    "sub_other": "{{count}} sous-catégories",
+    "unknown": "Inconnu",
+    "urgentCount_one": "{{count}} urgent",
+    "urgentCount_other": "{{count}} urgents",
+    "urgentCount_many": "{{count}} urgents",
+    "similarCount_one": "+{{count}} similaire",
+    "similarCount_other": "+{{count}} similaires",
+    "similarCount_many": "+{{count}} similaires",
+    "showMoreProblems_one": "Afficher {{count}} problème de plus ({{total}} restants)",
+    "showMoreProblems_other": "Afficher {{count}} problèmes de plus ({{total}} restants)",
+    "showMoreProblems_many": "Afficher {{count}} problèmes de plus ({{total}} restants)"
+  },
+  "title": "Analyse des problèmes",
+  "subtitle": "Problèmes clients récurrents regroupés par catégorie, avec leurs causes probables"
 }

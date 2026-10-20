@@ -1,5 +1,5 @@
 {
-  "configureApi": "请在设置中配置您的 API 端点",
+  "configureApi": "请在“管理 → 常规”中配置您的 API 端点",
   "filters": {
     "allCategories": "所有分类",
     "allSources": "所有来源",
@@ -16,7 +16,12 @@
     "similarityLow": "低",
     "similarityMed": "中",
     "similarityOff": "关闭",
-    "urgentOnly": "仅紧急"
+    "urgentOnly": "仅紧急",
+    "source": "来源",
+    "category": "类别",
+    "subcategory": "子类别",
+    "similarityHint": "合并措辞相似的问题。“低”合并最多；“关闭”则单独列出每个问题。",
+    "similarityLevelsHint": "两个问题需要多相似才会合并为一行。低：合并措辞大致相似的问题（行数最少）；中：合并措辞接近的问题；高：只合并几乎相同的措辞；关闭：每个问题单独一行。"
   },
   "noDataHint": "尝试扩展时间范围或调整筛选条件",
   "noDataTitle": "未找到所选时期的问题分析数据",
@@ -24,12 +29,14 @@
     "categories": "分类",
     "feedback": "反馈",
     "loadFailed": "无法加载此时间范围的反馈，因此不显示统计数据。请重试或缩小时间范围。",
-    "loadingWindow": "正在加载反馈… 目前 {{total, number}} 条中的 {{loaded, number}} 条。",
-    "partialWindow": "统计覆盖此时间范围内 {{total, number}} 条中的 {{loaded, number}} 条。",
+    "loadingWindow": "正在加载评论… 目前已读取 {{loaded, number}} 条。",
+    "partialWindow": "显示此期间最新的 {{loaded, number}} 条评论。要查看全部，请选择更短的期间或按来源筛选。",
     "problems": "问题",
     "retry": "重试",
     "subcategories": "子分类",
-    "urgent": "紧急"
+    "urgent": "紧急",
+    "reviewsWithProblem": "提到问题的评论",
+    "urgentReviews": "紧急评论"
   },
   "tree": {
     "markResolved": "标记为已解决",
@@ -41,8 +48,16 @@
     "reviews_one": "{{count}} 条评论",
     "reviews_other": "{{count}} 条评论",
     "similar": "相似：",
-    "sub_one": "{{count}} 个子项",
-    "sub_other": "{{count}} 个子项",
-    "unknown": "未知"
-  }
+    "sub_one": "{{count}} 个子类别",
+    "sub_other": "{{count}} 个子类别",
+    "unknown": "未知",
+    "urgentCount_one": "{{count}} 条紧急",
+    "urgentCount_other": "{{count}} 条紧急",
+    "similarCount_one": "+{{count}} 个相似",
+    "similarCount_other": "+{{count}} 个相似",
+    "showMoreProblems_one": "再显示 {{count}} 个问题（还剩 {{total}} 个）",
+    "showMoreProblems_other": "再显示 {{count}} 个问题（还剩 {{total}} 个）"
+  },
+  "title": "问题分析",
+  "subtitle": "按类别分组的重复客户问题及其可能的根本原因"
 }

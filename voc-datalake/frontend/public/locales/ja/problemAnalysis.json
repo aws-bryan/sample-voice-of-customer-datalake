@@ -1,5 +1,5 @@
 {
-  "configureApi": "設定でAPIエンドポイントを構成してください",
+  "configureApi": "「管理 → 一般」でAPIエンドポイントを構成してください",
   "filters": {
     "allCategories": "すべてのカテゴリ",
     "allSources": "すべてのソース",
@@ -16,7 +16,12 @@
     "similarityLow": "低",
     "similarityMed": "中",
     "similarityOff": "オフ",
-    "urgentOnly": "緊急のみ"
+    "urgentOnly": "緊急のみ",
+    "source": "ソース",
+    "category": "カテゴリ",
+    "subcategory": "サブカテゴリ",
+    "similarityHint": "表現が似ている問題をまとめます。「低」が最も多くまとめ、「オフ」は各問題を個別に表示します。",
+    "similarityLevelsHint": "2 つの問題を同じ行にまとめる類似度です。低はゆるく似た表現をまとめ（行が最も少ない）、中は近い表現を、高はほぼ同じ表現だけをまとめ、オフはすべての問題を別の行に表示します。"
   },
   "noDataHint": "時間範囲を広げるか、フィルターを調整してみてください",
   "noDataTitle": "選択した期間の問題分析データが見つかりません",
@@ -24,12 +29,14 @@
     "categories": "カテゴリ",
     "feedback": "フィードバック",
     "loadFailed": "この期間のフィードバックを読み込めなかったため、件数は表示されません。再試行するか、期間を狭めてください。",
-    "loadingWindow": "フィードバックを読み込み中… 現在 {{total, number}} 件中 {{loaded, number}} 件。",
-    "partialWindow": "件数はこの期間の {{total, number}} 件中 {{loaded, number}} 件を対象としています。",
+    "loadingWindow": "レビューを読み込み中… これまでに {{loaded, number}} 件を読み込みました。",
+    "partialWindow": "この期間の最新 {{loaded, number}} 件のレビューを表示しています。すべて見るには、期間を短くするかソースで絞り込んでください。",
     "problems": "問題",
     "retry": "再試行",
     "subcategories": "サブカテゴリ",
-    "urgent": "緊急"
+    "urgent": "緊急",
+    "reviewsWithProblem": "問題のあるレビュー",
+    "urgentReviews": "緊急のレビュー"
   },
   "tree": {
     "markResolved": "解決済みにする",
@@ -41,8 +48,16 @@
     "reviews_one": "{{count}} レビュー",
     "reviews_other": "{{count}} レビュー",
     "similar": "類似:",
-    "sub_one": "{{count}} サブ",
-    "sub_other": "{{count}} サブ",
-    "unknown": "不明"
-  }
+    "sub_one": "サブカテゴリ {{count}} 件",
+    "sub_other": "サブカテゴリ {{count}} 件",
+    "unknown": "不明",
+    "urgentCount_one": "緊急 {{count}} 件",
+    "urgentCount_other": "緊急 {{count}} 件",
+    "similarCount_one": "類似 +{{count}}",
+    "similarCount_other": "類似 +{{count}}",
+    "showMoreProblems_one": "問題をさらに {{count}} 件表示（残り {{total}} 件）",
+    "showMoreProblems_other": "問題をさらに {{count}} 件表示（残り {{total}} 件）"
+  },
+  "title": "問題分析",
+  "subtitle": "繰り返し発生する顧客の問題をカテゴリ別にまとめ、考えられる根本原因を表示"
 }

@@ -7,7 +7,7 @@
     "savingMobile": "..."
   },
   "ballot": {
-    "anonymousNotice": "Tu voto es anónimo: cuenta para la puntuación del equipo de este documento, pero no se atribuye a ti ni a nadie más.",
+    "anonymousNotice": "Tu voto cuenta para la puntuación del equipo de esta propuesta. No está vinculado a ninguna cuenta, y tu nombre solo se guarda si lo escribes abajo.",
     "axes": {
       "confidence": "Confianza",
       "confidenceHint": "¿Qué seguridad tienes en las dos estimaciones anteriores?",
@@ -28,7 +28,7 @@
       "unknown": "No se ha podido registrar tu voto en este momento. Inténtalo de nuevo en un instante."
     },
     "displayName": {
-      "hint": "Opcional. Los votos no se atribuyen a ninguna persona, así que puedes dejarlo en blanco.",
+      "hint": "Opcional. Si escribes un nombre, se guarda con tu voto; no se muestra en la puntuación del equipo. Déjalo en blanco para votar sin nombre.",
       "label": "Tu nombre (opcional)"
     },
     "done": {
@@ -49,6 +49,7 @@
       "pending": "Enviando..."
     },
     "title": "Puntúa esta propuesta",
+    "titleInactive": "Votación de la propuesta",
     "unavailable": {
       "description": "No se ha enviado nada. Vuelve a cargar la página para intentarlo de nuevo; la votación en sí puede estar abierta.",
       "title": "No se ha podido cargar esta votación"
@@ -76,7 +77,7 @@
     "saving": "Guardando...",
     "title": "Qué contiene esta fila"
   },
-  "configureApiEndpoint": "Configure el endpoint de la API en Configuración para ver la priorización.",
+  "configureApiEndpoint": "Configure el endpoint de la API en Administración → Configuración general para ver la priorización.",
   "docType": {
     "prd": "PRD",
     "prfaq": "PR/FAQ"
@@ -134,12 +135,16 @@
     "none": "Sin puntuar"
   },
   "roomVote": {
-    "anonymousNote": "Los votos emitidos aquí cuentan para la puntuación del equipo de arriba y no se atribuyen a ninguna persona.",
+    "anonymousNote": "Los votos emitidos aquí cuentan para la puntuación del equipo de arriba. No están vinculados a ninguna cuenta; solo se guarda un nombre si quien vota lo escribe, y no se muestra aquí.",
     "ballotsIn": "{{received}} de {{cap}} votos recibidos",
+    "checking": "Comprobando si ya hay una votación abierta...",
     "close": "Cerrar la votación",
     "closeFailed": "No se ha podido cerrar la votación. Inténtalo de nuevo: hasta que se cierre, se siguen aceptando votos.",
     "closed": "Esta votación está cerrada. No se aceptan más votos.",
     "closing": "Cerrando...",
+    "confirmMessage": "Esto crea un enlace público y un código QR para «{{title}}». Cualquiera que tenga el enlace puede enviar un voto, sin iniciar sesión, hasta que cierres la votación o caduque.",
+    "confirmOpen": "Abrir la votación",
+    "confirmTitle": "¿Abrir una votación pública en la sala?",
     "description": "Pon un código QR en pantalla y deja que todos los presentes envíen un voto anónimo desde su teléfono, sin cuenta.",
     "expired": "Esta votación ha caducado. No se aceptan más votos.",
     "open": "Abrir una votación en sala",
@@ -198,7 +203,8 @@
     "timeToMarketDescription": "¿Qué tan rápido se puede entregar?",
     "title": "Puntuaciones de priorización",
     "wholeRow": "Una sola papeleta para los {{documents}} documentos de esta fila.",
-    "yoursOnly": "Tu propia puntuación. Al guardar solo se escriben tus valores."
+    "yoursOnly": "Tu propia puntuación. Al guardar solo se escriben tus valores.",
+    "valueOfMax": "{{value}} de {{max}}"
   },
   "scoresUnavailable": {
     "description": "Sus puntuaciones guardadas no están disponibles en este momento, por lo que los números que se muestran a continuación son valores predeterminados y no los que alguien introdujo. Vuelva a cargar la página antes de guardar.",
@@ -212,7 +218,7 @@
     "label": "Ordenar por:",
     "priority": "Prioridad",
     "priorityFull": "Puntuación de prioridad",
-    "teamOrdered": "{{fields}} ordenan según los números del equipo, los que muestra cada fila, no según tu propia puntuación.",
+    "teamOrdered": "{{fields}} ordenan por la media del equipo —el número que muestra cada fila—, no por sus propias puntuaciones.",
     "ttm": "TdC",
     "ttmFull": "Tiempo de comercialización"
   },
@@ -241,10 +247,11 @@
     "unavailableDescription": "Las puntuaciones del equipo no se han podido leer ahora mismo, así que esta fila no muestra nada sobre ellas; no significa que nadie haya votado. Vuelve a cargar la página para ver lo que dijo el equipo."
   },
   "title": "Priorización",
-  "unsavedChanges": {
-    "cancel": "Permanecer en la página",
-    "confirm": "Descartar cambios",
-    "message": "Tiene puntuaciones de priorización sin guardar. ¿Desea descartar los cambios y abandonar esta página?",
-    "title": "Cambios sin guardar"
+  "explainer": {
+    "title": "Cómo se puntúa",
+    "score": "Cada revisor puntúa cuatro aspectos de 1 a 5. La puntuación de prioridad los pondera: impacto 40 %, tiempo de lanzamiento 30 %, encaje estratégico 20 %, confianza 10 %.",
+    "team": "Cada fila muestra la media del equipo entre quienes la puntuaron, y cuántos lo hicieron. Sus propias puntuaciones son los controles deslizantes dentro de la fila.",
+    "lineageTitle": "Qué significa la etiqueta de una fila",
+    "rowNote": "{{label}}: se explica en «Cómo se puntúa», encima de la lista."
   }
 }

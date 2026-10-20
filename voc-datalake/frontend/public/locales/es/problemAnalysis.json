@@ -1,5 +1,5 @@
 {
-  "configureApi": "Por favor, configure su endpoint de API en Configuración",
+  "configureApi": "Por favor, configure su endpoint de API en Administración → Configuración general",
   "filters": {
     "allCategories": "Todas las categorías",
     "allSources": "Todas las fuentes",
@@ -16,7 +16,12 @@
     "similarityLow": "Baja",
     "similarityMed": "Media",
     "similarityOff": "Desactivada",
-    "urgentOnly": "Solo urgentes"
+    "urgentOnly": "Solo urgentes",
+    "source": "Fuente",
+    "category": "Categoría",
+    "subcategory": "Subcategoría",
+    "similarityHint": "Agrupa problemas con redacción similar. Bajo agrupa más; Desactivado lista cada problema por separado.",
+    "similarityLevelsHint": "Cuánto deben parecerse dos problemas para compartir fila. Baja agrupa redacciones algo parecidas (menos filas), Media agrupa redacciones cercanas, Alta solo las casi idénticas y Desactivada muestra cada problema en su propia fila."
   },
   "noDataHint": "Intente ampliar el rango de tiempo o ajustar los filtros",
   "noDataTitle": "No se encontraron datos de análisis de problemas para el período seleccionado",
@@ -24,12 +29,14 @@
     "categories": "Categorías",
     "feedback": "Comentarios",
     "loadFailed": "No se pudieron cargar los comentarios de este periodo, por lo que no se muestran recuentos. Vuelve a intentarlo o reduce el intervalo de tiempo.",
-    "loadingWindow": "Cargando comentarios… {{loaded, number}} de {{total, number}} hasta ahora.",
-    "partialWindow": "Los recuentos abarcan {{loaded, number}} de {{total, number}} elementos de este periodo.",
+    "loadingWindow": "Cargando reseñas… {{loaded, number}} leídas hasta ahora.",
+    "partialWindow": "Se muestran las {{loaded, number}} reseñas más recientes de este periodo. Para verlas todas, elija un periodo más corto o filtre por fuente.",
     "problems": "Problemas",
     "retry": "Reintentar",
     "subcategories": "Subcategorías",
-    "urgent": "Urgente"
+    "urgent": "Urgente",
+    "reviewsWithProblem": "Reseñas con un problema",
+    "urgentReviews": "Reseñas urgentes"
   },
   "tree": {
     "markResolved": "Marcar como resuelto",
@@ -46,6 +53,17 @@
     "sub_one": "{{count}} subcategoría",
     "sub_many": "{{count}} subcategorías",
     "sub_other": "{{count}} subcategorías",
-    "unknown": "Desconocido"
-  }
+    "unknown": "Desconocido",
+    "urgentCount_one": "{{count}} urgente",
+    "urgentCount_other": "{{count}} urgentes",
+    "urgentCount_many": "{{count}} urgentes",
+    "similarCount_one": "+{{count}} parecido",
+    "similarCount_other": "+{{count}} parecidos",
+    "similarCount_many": "+{{count}} parecidos",
+    "showMoreProblems_one": "Mostrar {{count}} problema más (quedan {{total}})",
+    "showMoreProblems_other": "Mostrar {{count}} problemas más (quedan {{total}})",
+    "showMoreProblems_many": "Mostrar {{count}} problemas más (quedan {{total}})"
+  },
+  "title": "Análisis de problemas",
+  "subtitle": "Problemas recurrentes de clientes agrupados por categoría, con sus causas probables"
 }

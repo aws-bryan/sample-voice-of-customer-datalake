@@ -39,7 +39,7 @@ describe('DashboardPDFContent', () => {
 
   it('renders category breakdown entries', () => {
     render(<DashboardPDFContent {...makeProps({ categoryBreakdown: [{ name: 'shipping', value: 42 }] })} />)
-    expect(screen.getByText('shipping')).toBeInTheDocument()
+    expect(screen.getByText('Shipping')).toBeInTheDocument()
     expect(screen.getByText('42')).toBeInTheDocument()
   })
 
