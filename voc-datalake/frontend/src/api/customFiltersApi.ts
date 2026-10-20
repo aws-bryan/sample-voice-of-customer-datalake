@@ -24,22 +24,6 @@ export function getCustomFilters(): Promise<{ custom_filters: CustomFilterConfig
 }
 
 /** A preview value for a custom-field facet, with how many records carried it. */
-/**
- * Turn custom-filter selections into `cf_<key>=<value>` request params.
- *
- * The single source for how a selections map becomes query params — the server
- * reads the `cf_` prefix on `/feedback`, `/feedback/urgent`, `/feedback/search`
- * and `/feedback/problems`. Empty values are dropped (a cleared dropdown is "no
- * selection", not "match empty").
- */
-export function toCustomFieldParams(customFilters: Record<string, string>): Record<string, string> {
-  const params: Record<string, string> = {}
-  for (const [key, value] of Object.entries(customFilters)) {
-    if (value) params[`cf_${key}`] = value
-  }
-  return params
-}
-
 export interface CustomFieldValue {
   readonly value: string
   readonly count: number

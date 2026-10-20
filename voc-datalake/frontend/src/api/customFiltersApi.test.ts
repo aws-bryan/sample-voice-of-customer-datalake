@@ -11,25 +11,7 @@ import {
   getCustomFilters,
   saveCustomFilters,
   getCustomFieldCandidates,
-  toCustomFieldParams,
 } from './customFiltersApi'
-
-describe('toCustomFieldParams', () => {
-  it('prefixes each selection key with cf_', () => {
-    expect(toCustomFieldParams({ tier: 'Gold', region: 'EMEA' })).toEqual({
-      cf_tier: 'Gold',
-      cf_region: 'EMEA',
-    })
-  })
-
-  it('drops keys with an empty value (a cleared dropdown is "no selection")', () => {
-    expect(toCustomFieldParams({ tier: 'Gold', region: '' })).toEqual({ cf_tier: 'Gold' })
-  })
-
-  it('returns an empty object for no selections', () => {
-    expect(toCustomFieldParams({})).toEqual({})
-  })
-})
 
 describe('getCustomFilters', () => {
   beforeEach(() => mockFetchApi.mockReset())
