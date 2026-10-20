@@ -34,6 +34,12 @@ export interface FeedbackItem {
   direct_customer_quote?: string
   persona_name?: string
   persona_type?: string
+  /**
+   * Validated registry enrichment values (e.g. `{ usefulness: 'high' }`), filled
+   * at the API boundary by `normalizeFeedbackItem`. A field absent here is
+   * unscored. Optional so fixtures and older call sites need not supply it.
+   */
+  enrichment?: Readonly<Record<string, string>>
 }
 
 /**

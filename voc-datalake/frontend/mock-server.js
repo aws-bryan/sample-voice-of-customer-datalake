@@ -29,6 +29,9 @@ const mockFeedback = [
     // see the note beside PERSONA_FIELD in lambda/shared/feedback.py.
     persona_name: 'Impatient Shopper',
     persona_type: 'churn_risk',
+    // Registry enrichment field (shared/enrichment_fields.py). Item 3 has none on
+    // purpose: it stands in for rows enriched before the field existed (unscored).
+    usefulness: 'high',
     // Extra import fields persisted as a nested map (Phase 2) — drives the
     // custom-filter demo locally. Only a few items carry these on purpose.
     custom_fields: { region: 'EMEA', plan: 'enterprise' },
@@ -54,6 +57,7 @@ const mockFeedback = [
     direct_customer_quote: 'resolved my issue within minutes',
     persona_name: 'Satisfied Customer',
     persona_type: 'advocate',
+    usefulness: 'medium',
     custom_fields: { region: 'APAC', plan: 'free' },
     // Written 3 days ago, imported today
     source_created_at: daysAgo(3),
@@ -99,20 +103,144 @@ function filterByDateBasis(items, searchParams) {
   });
 }
 
-// Apply cf_<key>=<value> post-filters (Phase 4c), mirroring the backend:
-// str() coalescing, AND across keys, missing field fails the match.
+// Apply cf_<key>=<value> post-filters, mirroring shared/feedback_filters.py:
+// str() coalescing; a REPEATED key is several values (any of them matches);
+// AND across keys; a missing field fails the match. Never comma-split: custom
+// values are free text ("Las Vegas, NV").
 function applyCustomFieldFilters(items, searchParams) {
   if (!searchParams) return items;
-  const filters = [];
+  const wanted = new Map();
   for (const [rawKey, value] of searchParams.entries()) {
-    if (rawKey.startsWith('cf_') && value !== '') filters.push([rawKey.slice(3), value]);
+    if (!rawKey.startsWith('cf_') || value === '' || rawKey === 'cf_') continue;
+    const key = rawKey.slice(3);
+    wanted.set(key, [...(wanted.get(key) ?? []), value]);
   }
-  if (filters.length === 0) return items;
+  if (wanted.size === 0) return items;
   return items.filter((item) => {
     const fields = item.custom_fields;
     if (!fields || typeof fields !== 'object') return false;
-    return filters.every(([key, want]) => fields[key] != null && String(fields[key]) === want);
+    return [...wanted].every(([key, values]) => fields[key] != null && values.includes(String(fields[key])));
   });
+}
+
+// The shared filter model (mirrors shared/feedback_filters.py FeedbackFilters):
+// comma multi-values OR within a dimension, AND across dimensions; urgent=true;
+// an enrichment field accepts its values plus `unscored` (no stored value).
+const FILTER_LIST_DIMENSIONS = [
+  ['source', 'source_platform'],
+  ['category', 'category'],
+  ['subcategory', 'subcategory'],
+  ['sentiment', 'sentiment_label'],
+];
+const ENRICHMENT_FILTER_FIELDS = [{ name: 'usefulness', values: ['high', 'medium', 'low'] }];
+
+function splitFilterParam(searchParams, key) {
+  return (searchParams?.get(key) ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+}
+
+function enrichmentValue(item, field) {
+  const value = typeof item[field.name] === 'string' ? item[field.name].trim().toLowerCase() : '';
+  return field.values.includes(value) ? value : 'unscored';
+}
+
+function applyFeedbackFilters(items, searchParams) {
+  const lists = FILTER_LIST_DIMENSIONS
+    .map(([param, attribute]) => [attribute, splitFilterParam(searchParams, param)])
+    .filter(([, allowed]) => allowed.length > 0);
+  const enrichment = ENRICHMENT_FILTER_FIELDS
+    .map((field) => [field, splitFilterParam(searchParams, field.name)])
+    .filter(([, allowed]) => allowed.length > 0);
+  const urgentOnly = searchParams?.get('urgent') === 'true';
+  const matched = items.filter((item) =>
+    lists.every(([attribute, allowed]) => allowed.includes(item[attribute]))
+    && (!urgentOnly || item.urgency === 'high')
+    && enrichment.every(([field, allowed]) => allowed.includes(enrichmentValue(item, field))));
+  return applyCustomFieldFilters(matched, searchParams);
+}
+
+/** The window plus every filter: what each filter-aware route scans. */
+function filteredWindow(searchParams) {
+  return applyFeedbackFilters(filterByDateBasis(mockFeedback, searchParams), searchParams);
+}
+
+function countBy(items, getKey) {
+  return items.reduce((acc, item) => {
+    const key = getKey(item);
+    if (key) acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+const SENTIMENT_LABELS = ['positive', 'neutral', 'negative', 'mixed'];
+
+// /metrics/overview over the filtered window (mirrors _overview_from_items).
+function buildOverview(items, searchParams) {
+  const days = Number(searchParams?.get('days')) || 7;
+  const sentiment = Object.fromEntries(SENTIMENT_LABELS.map((label) => [label, 0]));
+  for (const item of items) {
+    if (item.sentiment_label in sentiment) sentiment[item.sentiment_label] += 1;
+  }
+  const total = Object.values(sentiment).reduce((a, b) => a + b, 0);
+  const avg = items.length ? items.reduce((s, i) => s + (i.sentiment_score ?? 0), 0) / items.length : 0;
+  const byDay = countBy(items, (i) => (i.processed_at ?? '').slice(0, 10));
+  return {
+    period_days: days,
+    feedback_count: items.length,
+    is_partial: false,
+    summary: {
+      period_days: days,
+      total_feedback: items.length,
+      avg_sentiment: Math.round(avg * 1000) / 1000,
+      urgent_count: items.filter((i) => i.urgency === 'high').length,
+      is_partial: false,
+      daily_totals: Object.entries(byDay).map(([date, count]) => ({ date, count })),
+      daily_sentiment: Object.entries(byDay).map(([date, count]) => ({ date, avg_sentiment: avg, count })),
+    },
+    sentiment: {
+      period_days: days,
+      total,
+      is_partial: false,
+      breakdown: sentiment,
+      percentages: Object.fromEntries(
+        Object.entries(sentiment).map(([k, v]) => [k, Math.round((v / Math.max(total, 1)) * 1000) / 10]),
+      ),
+    },
+    categories: countBy(items, (i) => i.category ?? 'other'),
+    sources: countBy(items, (i) => i.source_platform ?? 'unknown'),
+    personas: countBy(items, (i) => i.persona_type || 'unknown'),
+    issues: countBy(items, (i) => i.problem_summary),
+    enrichment: Object.fromEntries(
+      ENRICHMENT_FILTER_FIELDS.map((field) => [field.name, countBy(items, (i) => enrichmentValue(i, field))]),
+    ),
+  };
+}
+
+// /feedback/problems leaves (mirrors _aggregate_problems): one leaf per exact
+// (category, subcategory, problem_summary), with a crude keyword set.
+function buildProblemLeaves(items) {
+  const leaves = new Map();
+  for (const item of items) {
+    if (!item.problem_summary) continue;
+    const key = [item.category, item.subcategory, item.problem_summary].join('|');
+    const leaf = leaves.get(key) ?? {
+      category: item.category ?? 'other',
+      subcategory: item.subcategory ?? 'general',
+      problem: item.problem_summary,
+      keywords: [...new Set(item.problem_summary.toLowerCase().split(/\W+/).filter((w) => w.length > 3))].sort(),
+      count: 0,
+      urgent_count: 0,
+      sentiment_sum: 0,
+      root_cause: null,
+    };
+    leaf.count += 1;
+    if (item.urgency === 'high') leaf.urgent_count += 1;
+    leaf.sentiment_sum += item.sentiment_score ?? 0;
+    leaf.root_cause ??= item.problem_root_cause_hypothesis ?? null;
+    leaves.set(key, leaf);
+  }
+  return [...leaves.values()]
+    .map(({ sentiment_sum: sum, ...leaf }) => ({ ...leaf, avg_sentiment: sum / leaf.count }))
+    .sort((a, b) => b.count - a.count);
 }
 
 // Rank custom_fields keys by repeating values (Phase 4b), mirroring the backend
@@ -501,31 +629,44 @@ const handlers = {
   'POST /scrapers': (body) => ({ success: true, scraper: { id: 'scraper_' + Date.now(), ...body } }),
 
   'GET /feedback': (_body, searchParams) => {
-    const items = applyCustomFieldFilters(filterByDateBasis(mockFeedback, searchParams), searchParams);
+    const items = filteredWindow(searchParams);
     return { count: items.length, total: items.length, offset: 0, limit: 50, is_partial_window: false, items };
   },
   'GET /feedback/urgent': (_body, searchParams) => {
-    const items = applyCustomFieldFilters(filterByDateBasis(mockFeedback, searchParams), searchParams).filter(f => f.urgency === 'high');
+    const items = filteredWindow(searchParams).filter(f => f.urgency === 'high');
     return { count: items.length, items };
   },
+  'GET /feedback/search': (_body, searchParams) => {
+    const q = (searchParams?.get('q') ?? '').trim().toLowerCase();
+    if (q.length < 2) {
+      return { __status: 400, body: { success: false, message: 'q must be at least 2 characters' } };
+    }
+    const items = filteredWindow(searchParams).filter((i) => (i.original_text ?? '').toLowerCase().includes(q));
+    return { count: items.length, is_partial_window: false, items };
+  },
+  'GET /feedback/problems': (_body, searchParams) => {
+    const items = filteredWindow(searchParams);
+    return {
+      period_days: Number(searchParams?.get('days')) || 30,
+      feedback_count: items.length,
+      is_partial: false,
+      problems: buildProblemLeaves(items),
+    };
+  },
+  'GET /metrics/overview': (_body, searchParams) => buildOverview(filteredWindow(searchParams), searchParams),
   'GET /feedback/custom-field-candidates': (_body, searchParams) => {
     const items = filterByDateBasis(mockFeedback, searchParams);
     return { sampled_count: items.length, is_partial: false, candidates: rankCustomFieldCandidates(items) };
   },
   'GET /feedback/entities': (_body, searchParams) => {
     const items = filterByDateBasis(mockFeedback, searchParams);
-    const countBy = (getKey) => items.reduce((acc, item) => {
-      const key = getKey(item);
-      if (key) acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
     return {
       period_days: Number(searchParams?.get('days')) || 7,
       feedback_count: items.length,
       entities: {
         keywords: {},
-        categories: countBy(i => i.category),
-        issues: countBy(i => i.problem_summary),
+        categories: countBy(items, i => i.category),
+        issues: countBy(items, i => i.problem_summary),
         // The ARCHETYPE, matching `shared/feedback.py::persona_bucket`: both of the
         // real route's branches bucket by `persona_type`, and an item with none
         // counts as `unknown` rather than being dropped, so the persona map sums to
@@ -546,8 +687,8 @@ const handlers = {
         // the real route. Every fixture above uses a declared archetype, so the two
         // agree in practice; if a fixture ever needs an out-of-contract value, add the
         // membership test rather than leaving the stub disagreeing.
-        personas: countBy(i => i.persona_type || 'unknown'),
-        sources: countBy(i => i.source_platform),
+        personas: countBy(items, i => i.persona_type || 'unknown'),
+        sources: countBy(items, i => i.source_platform),
       },
     };
   },
@@ -819,6 +960,191 @@ function collectJson(req, res, onBody) {
   });
 }
 
+// ============================================================================
+// BEGIN Data Quality mock (Settings → Data Quality tab)
+//
+// Mirrors the /settings/data-quality routes in lambda/api/settings_handler.py:
+//   GET  /settings/data-quality                    snapshot + registry + jobs
+//   POST /settings/data-quality/jobs               start profile | enrich
+//   POST /settings/data-quality/jobs/{id}/cancel   stop a running job
+// Stateful: every GET advances each running job by ~25% (like pollProductJob),
+// so the tab's 3s polling walks a job to completion in four polls. Enrich jobs
+// mutate the "live" per-source counts; only a completed profile job copies them
+// into the snapshot, matching the real worker (stats are a scan, not a feed).
+// Wired in by the single `handleDataQualityRoute` call inside createServer.
+// ============================================================================
+const DQ_FIELDS = [{ name: 'usefulness', values: ['high', 'medium', 'low'] }];
+const DQ_MODES = ['missing', 'all'];
+const DQ_MAX_JOBS = 20;
+const DQ_POLLS_TO_FINISH = 4;
+
+const dqSource = (source, count, ratings, sentiments, lengths, usefulness) => ({
+  source, count, ratings, sentiments, lengths, enrichment: { usefulness },
+});
+
+// The current state of the "table". Reddit was ingested before the usefulness
+// field existed, so every row is unscored; Trustpilot is half backfilled.
+const dqLive = [
+  dqSource('Trustpilot', 812,
+    { 1: 10, 2: 4, 3: 20, 4: 100, 5: 600, none: 78 },
+    { positive: 500, negative: 200, neutral: 100, mixed: 12 },
+    { '0-100': 300, '101-500': 400, '501-1000': 80, '1001-2000': 30, '2000+': 2 },
+    { high: 100, medium: 200, low: 50, unscored: 462 }),
+  dqSource('App Store', 330,
+    { 1: 40, 2: 25, 3: 45, 4: 90, 5: 130 },
+    { positive: 180, negative: 100, neutral: 50 },
+    { '0-100': 210, '101-500': 110, '501-1000': 10 },
+    { high: 90, medium: 160, low: 80 }),
+  dqSource('Reddit', 120,
+    { none: 120 },
+    { positive: 30, negative: 60, neutral: 25, unknown: 5 },
+    { '0-100': 20, '101-500': 70, '501-1000': 25, '1001-2000': 5 },
+    { unscored: 120 }),
+];
+
+const dqClone = (value) => JSON.parse(JSON.stringify(value));
+const dqTotalRows = () => dqLive.reduce((sum, s) => sum + s.count, 0);
+
+const dqState = {
+  stats: { generated_at: daysAgo(1), scanned: dqTotalRows(), sources: dqClone(dqLive) },
+  jobs: [
+    {
+      job_id: 'dq_20261015090000_0a1b2c3d', kind: 'profile', status: 'completed',
+      created_at: daysAgo(1), updated_at: daysAgo(1), completed_at: daysAgo(1),
+      total: dqTotalRows(), processed: dqTotalRows(), updated: 0, skipped: 0, failed: 0, planned: true,
+    },
+    {
+      job_id: 'dq_20261014090000_4e5f6a7b', kind: 'enrich', source: 'App Store', field: 'usefulness',
+      mode: 'all', status: 'failed', error: 'Model invocation throttled; retry later',
+      created_at: daysAgo(2), updated_at: daysAgo(2), completed_at: daysAgo(2),
+      total: 330, processed: 41, updated: 38, skipped: 0, failed: 3, planned: true,
+    },
+  ],
+};
+
+function dqNewJobId() {
+  const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
+  const hex = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
+  return `dq_${stamp}_${hex}`;
+}
+
+const dqSameTarget = (a, b) =>
+  a.kind === b.kind && (a.kind === 'profile' || (a.source === b.source && a.field === b.field));
+
+// Public shape only: the bookkeeping (`_polls`, `_target`) never leaves the mock.
+const dqPublic = ({ _polls, _target, ...job }) => job;
+
+// Share of re-scored rows the mock "model" puts in high / medium (rest → low).
+const DQ_SIMULATED_SPLIT = { high: 0.3, medium: 0.5 };
+
+// Enrich completion: fill the bucket(s) the job targeted, as the worker would.
+function dqApplyEnrich(job) {
+  const live = dqLive.find((s) => s.source === job.source);
+  if (!live) return;
+  const counts = live.enrichment[job.field] ?? {};
+  const rescored = job.mode === 'all' ? live.count : (counts.unscored ?? 0);
+  const keep = job.mode === 'all' ? { high: 0, medium: 0, low: 0 } : counts;
+  const high = Math.round(rescored * DQ_SIMULATED_SPLIT.high);
+  const medium = Math.round(rescored * DQ_SIMULATED_SPLIT.medium);
+  live.enrichment[job.field] = {
+    high: (keep.high ?? 0) + high,
+    medium: (keep.medium ?? 0) + medium,
+    low: (keep.low ?? 0) + rescored - high - medium,
+    unscored: 0,
+  };
+}
+
+function dqAdvance(job) {
+  if (job.status !== 'running') return;
+  job._polls += 1;
+  const done = job._polls >= DQ_POLLS_TO_FINISH;
+  const share = Math.min(1, job._polls / DQ_POLLS_TO_FINISH);
+  job.processed = Math.round(job._target * share);
+  job.updated_at = new Date().toISOString();
+  if (job.kind === 'enrich') {
+    // The planner is still enumerating for the first half: total grows.
+    job.planned = job._polls >= DQ_POLLS_TO_FINISH / 2;
+    job.total = job.planned ? job._target : Math.round(job._target * Math.min(1, share * 2));
+    job.updated = job.processed;
+  }
+  if (!done) return;
+  job.status = 'completed';
+  job.completed_at = job.updated_at;
+  if (job.kind === 'profile') {
+    // A profile learns its total only at the end.
+    job.total = job.processed;
+    dqState.stats = { generated_at: job.completed_at, scanned: job.total, sources: dqClone(dqLive) };
+  } else {
+    dqApplyEnrich(job);
+  }
+}
+
+function dqValidatedRequest(body) {
+  if (body?.kind === 'profile') return { kind: 'profile' };
+  if (body?.kind !== 'enrich') return { error: 'kind must be one of: profile, enrich' };
+  if (!DQ_FIELDS.some((f) => f.name === body.field)) return { error: 'field must be one of: usefulness' };
+  if (!DQ_MODES.includes(body.mode)) return { error: 'mode must be one of: missing, all' };
+  if (typeof body.source !== 'string' || body.source.trim() === '') return { error: 'source must be a non-empty string' };
+  return { kind: 'enrich', source: body.source, field: body.field, mode: body.mode };
+}
+
+function dqEnrichTarget(request) {
+  const live = dqLive.find((s) => s.source === request.source);
+  if (!live) return 0;
+  return request.mode === 'all' ? live.count : (live.enrichment[request.field]?.unscored ?? 0);
+}
+
+function dqStartJob(body) {
+  const request = dqValidatedRequest(body);
+  if (request.error) return { status: 400, payload: { success: false, message: request.error } };
+  if (dqState.jobs.some((j) => j.status === 'running' && dqSameTarget(j, request))) {
+    return { status: 409, payload: { success: false, message: 'A data quality job is already running for this target' } };
+  }
+  const now = new Date().toISOString();
+  const job = {
+    ...request, job_id: dqNewJobId(), status: 'running', created_at: now, updated_at: now,
+    total: 0, processed: 0, updated: 0, skipped: 0, failed: 0, planned: false,
+    _polls: 0, _target: request.kind === 'profile' ? dqTotalRows() : dqEnrichTarget(request),
+  };
+  dqState.jobs = [job, ...dqState.jobs].slice(0, DQ_MAX_JOBS);
+  return { status: 200, payload: { success: true, job: dqPublic(job) } };
+}
+
+function dqCancelJob(jobId) {
+  const job = dqState.jobs.find((j) => j.job_id === jobId);
+  if (!job) return { status: 404, payload: { success: false, message: 'Job not found' } };
+  if (job.status !== 'running') return { status: 409, payload: { success: false, message: 'Job is not running' } };
+  job.status = 'cancelled';
+  job.completed_at = job.updated_at = new Date().toISOString();
+  return { status: 200, payload: { success: true, job: dqPublic(job) } };
+}
+
+/** Serve a data-quality route; returns false when the request is not one. */
+function handleDataQualityRoute(req, res, url) {
+  const reply = ({ status, payload }) => {
+    res.writeHead(status);
+    res.end(JSON.stringify(payload));
+  };
+  if (req.method === 'GET' && url.pathname === '/settings/data-quality') {
+    dqState.jobs.forEach(dqAdvance);
+    reply({ status: 200, payload: { fields: DQ_FIELDS, stats: dqState.stats, jobs: dqState.jobs.map(dqPublic) } });
+    return true;
+  }
+  if (req.method === 'POST' && url.pathname === '/settings/data-quality/jobs') {
+    collectJson(req, res, (body) => reply(dqStartJob(body)));
+    return true;
+  }
+  const cancelMatch = url.pathname.match(/^\/settings\/data-quality\/jobs\/([^/]+)\/cancel$/);
+  if (req.method === 'POST' && cancelMatch) {
+    reply(dqCancelJob(decodeURIComponent(cancelMatch[1])));
+    return true;
+  }
+  return false;
+}
+// ============================================================================
+// END Data Quality mock
+// ============================================================================
+
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -834,8 +1160,14 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const key = `${req.method} ${url.pathname}`;
 
-  // Handle feedback by ID
-  if (req.method === 'GET' && url.pathname.startsWith('/feedback/') && url.pathname !== '/feedback/urgent' && url.pathname !== '/feedback/entities') {
+  // Data Quality mock — see the BEGIN/END block above createServer.
+  if (handleDataQualityRoute(req, res, url)) return;
+
+  // Handle feedback by ID. Exact-key routes win (/feedback/urgent, /search,
+  // /problems, /entities, /custom-field-candidates, ...), the same precedence
+  // rule as the project-detail pattern below; a deny-list here silently 404'd
+  // every new /feedback/<name> route.
+  if (req.method === 'GET' && url.pathname.startsWith('/feedback/') && !(key in handlers)) {
     const id = url.pathname.split('/')[2];
     const item = mockFeedback.find(f => f.feedback_id === id);
     if (item) {

@@ -65,6 +65,10 @@ voice-of-customer-datalake/       # Root repository
     │   │       ├── prfaq-generation.json
     │   │       └── research-analysis.json
     │   ├── stream/                   # Streaming chat Lambda (TypeScript, esbuild) — SSE at /chat/stream via API Gateway
+    │   │                             #   Chat scope: request carries a structured `filters` field (shared
+    │   │                             #   wire keys) + `limit` (MAX_CHAT_FEEDBACK_ITEMS=1000); context/feedback-filters.ts
+    │   │                             #   parses it to a ChatFilters floor the search_feedback tool cannot widen.
+    │   │                             #   Legacy prose `context` regex is the fallback when no `filters` sent.
     │   └── layers/
     │       ├── ingestion-deps/       # Layer: requests, aws-lambda-powertools, beautifulsoup4
     │       └── processing-deps/      # Layer: aws-lambda-powertools
@@ -176,16 +180,31 @@ voice-of-customer-datalake/       # Root repository
 ### Metrics (metrics_handler.py)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/feedback` | List feedback with filters (days, source, category, sentiment) |
+| GET | `/feedback` | List feedback with the shared filters (below) |
 | GET | `/feedback/{id}` | Get single feedback item |
 | GET | `/feedback/{id}/similar` | Get similar feedback items |
-| GET | `/feedback/urgent` | Get high-urgency items |
+| GET | `/feedback/urgent` | Get high-urgency items (shared filters apply) |
+| GET | `/feedback/search` | Server-side text search, `q` ≥ 2 chars after trim (shared filters apply) |
+| GET | `/feedback/problems` | Finest-grain problem leaves for Problem Analysis (scan cap 50k, shared filters apply before aggregation) |
 | GET | `/feedback/entities` | Get keywords, categories, issues for filters |
 | GET | `/metrics/summary` | Dashboard summary metrics |
 | GET | `/metrics/sentiment` | Sentiment breakdown |
 | GET | `/metrics/categories` | Category breakdown |
 | GET | `/metrics/sources` | Source breakdown |
 | GET | `/metrics/personas` | Persona breakdown |
+| GET | `/metrics/overview` | Every Dashboard/Categories breakdown for ONE filtered window from a single scan; pages call it only while filters are active (aggregates otherwise) |
+
+> **Shared filter grammar** (`shared/feedback_filters.py`, mirrored by
+> `frontend/src/api/feedbackFilters.ts`; the page URLs use the same keys):
+> `source`, `category`, `subcategory`, `sentiment` take comma lists (OR within,
+> AND across); `urgent=true`; each enrichment field in
+> `shared/enrichment_fields.py` (today `usefulness`) takes its values plus
+> `unscored`; `cf_<key>=<value>` for custom fields — multi-select by REPEATING
+> the key (`cf_tier=Gold&cf_tier=Platinum`, any value matches, AND across keys),
+> never comma-joined because custom values are free text. Routes must read
+> `multiValueQueryStringParameters` for it (`_request_filters` in
+> `metrics_handler.py`). Only `source` is pushed down to DynamoDB; the rest are
+> row post-filters.
 
 ### Chat (chat_handler.py)
 | Method | Path | Description |
@@ -222,6 +241,15 @@ voice-of-customer-datalake/       # Root repository
 | GET | `/settings/categories` | Get category configuration |
 | PUT | `/settings/categories` | Save category configuration |
 | POST | `/settings/categories/generate` | AI-generate categories |
+| GET | `/settings/data-quality` | Admin: per-source profile + recent Data Quality jobs |
+| POST | `/settings/data-quality/jobs` | Admin: start an async profile scan or enrichment backfill for one source |
+| POST | `/settings/data-quality/jobs/{job_id}/cancel` | Admin: cancel a running job |
+
+> Data Quality jobs run on an SQS worker in `VocApiStack`
+> (`lambda/jobs/data_quality/handler.py`, queue + DLQ, `maxConcurrency` from
+> context `dataQualityMaxConcurrency`, default 5). Jobs, per-source locks and
+> profiles live in the aggregates table under `DATA_QUALITY#*` — not `voc-jobs`,
+> which is keyed by `PROJECT#`.
 
 ### Users (users_handler.py)
 | Method | Path | Description |

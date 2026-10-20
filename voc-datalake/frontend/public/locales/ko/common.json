@@ -128,8 +128,44 @@
     "selectDateRange": "기간 선택",
     "startDate": "시작일"
   },
-  "customFilter": {
-    "filterBy": "{{label}}(으)로 필터링",
-    "allOf": "모든 {{label}}"
+  "feedbackFilters": {
+    "title": "필터",
+    "activeCount_one": "{{count}}개 적용됨",
+    "activeCount_other": "{{count}}개 적용됨",
+    "clearAll": "모두 지우기",
+    "clearGroup": "지우기",
+    "noOptions": "이 기간에 없음",
+    "sources": "소스",
+    "categories": "카테고리",
+    "subcategories": "하위 카테고리",
+    "sentiment": "감정",
+    "urgency": "긴급도",
+    "urgentOnly": "긴급만",
+    "noMatches": "필터와 일치하는 피드백이 없습니다",
+    "noMatchesHint": "기간을 넓히거나 일부 필터를 해제하세요.",
+    "loadFailed": "필터링된 결과를 불러오지 못했습니다.",
+    "retry": "다시 시도",
+    "updating": "업데이트 중…"
+  },
+  "feedbackOverlay": {
+    "problem": "문제:",
+    "rootCause": "근본 원인:",
+    "urgent": "긴급",
+    "close": "닫기",
+    "viewSource": "원본 보기",
+    "openFullDetails": "전체 상세 보기"
+  },
+  "enrichment": {
+    "values": {
+      "unscored": "미평가"
+    },
+    "usefulness": {
+      "label": "유용성",
+      "values": {
+        "high": "높음",
+        "medium": "보통",
+        "low": "낮음"
+      }
+    }
   }
 }

@@ -128,8 +128,44 @@
     "selectDateRange": "Select Date Range",
     "startDate": "Start Date"
   },
-  "customFilter": {
-    "filterBy": "Filter by {{label}}",
-    "allOf": "All {{label}}"
+  "feedbackFilters": {
+    "title": "Filters",
+    "activeCount_one": "{{count}} active",
+    "activeCount_other": "{{count}} active",
+    "clearAll": "Clear all",
+    "clearGroup": "Clear",
+    "noOptions": "None in this period",
+    "sources": "Sources",
+    "categories": "Categories",
+    "subcategories": "Subcategories",
+    "sentiment": "Sentiment",
+    "urgency": "Urgency",
+    "urgentOnly": "Urgent only",
+    "noMatches": "No feedback matches these filters",
+    "noMatchesHint": "Widen the time range or clear some filters.",
+    "loadFailed": "Couldn't load the filtered results.",
+    "retry": "Retry",
+    "updating": "Updating…"
+  },
+  "feedbackOverlay": {
+    "problem": "Issue:",
+    "rootCause": "Root cause:",
+    "urgent": "Urgent",
+    "close": "Close",
+    "viewSource": "View source",
+    "openFullDetails": "Open full details"
+  },
+  "enrichment": {
+    "values": {
+      "unscored": "Not scored"
+    },
+    "usefulness": {
+      "label": "Usefulness",
+      "values": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      }
+    }
   }
 }

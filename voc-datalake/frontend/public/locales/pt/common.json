@@ -132,8 +132,44 @@
     "selectDateRange": "Selecionar período",
     "startDate": "Data inicial"
   },
-  "customFilter": {
-    "filterBy": "Filtrar por {{label}}",
-    "allOf": "Todos: {{label}}"
+  "feedbackFilters": {
+    "title": "Filtros",
+    "activeCount_one": "{{count}} ativo",
+    "activeCount_other": "{{count}} ativos",
+    "clearAll": "Limpar tudo",
+    "clearGroup": "Limpar",
+    "noOptions": "Nenhum neste período",
+    "sources": "Fontes",
+    "categories": "Categorias",
+    "subcategories": "Subcategorias",
+    "sentiment": "Sentimento",
+    "urgency": "Urgência",
+    "urgentOnly": "Somente urgentes",
+    "noMatches": "Nenhum feedback corresponde a estes filtros",
+    "noMatchesHint": "Amplie o período ou remova alguns filtros.",
+    "loadFailed": "Não foi possível carregar os resultados filtrados.",
+    "retry": "Tentar novamente",
+    "updating": "Atualizando…"
+  },
+  "feedbackOverlay": {
+    "problem": "Problema:",
+    "rootCause": "Causa raiz:",
+    "urgent": "Urgente",
+    "close": "Fechar",
+    "viewSource": "Ver origem",
+    "openFullDetails": "Abrir todos os detalhes"
+  },
+  "enrichment": {
+    "values": {
+      "unscored": "Não avaliado"
+    },
+    "usefulness": {
+      "label": "Utilidade",
+      "values": {
+        "high": "Alta",
+        "medium": "Média",
+        "low": "Baixa"
+      }
+    }
   }
 }

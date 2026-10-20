@@ -180,9 +180,9 @@ export async function fetchApi<T>(endpoint: string, options?: RequestInit): Prom
 function buildSearchParams(params: object): URLSearchParams {
   const searchParams = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
-    if (value != null) {
-      searchParams.set(key, String(value))
-    }
+    // A list is a repeated key (multi-select custom fields: `cf_tier=Gold&cf_tier=Platinum`).
+    const values: unknown[] = Array.isArray(value) ? value : [value]
+    for (const item of values) if (item != null) searchParams.append(key, String(item))
   }
   return searchParams
 }

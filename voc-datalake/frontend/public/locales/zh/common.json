@@ -128,8 +128,44 @@
     "selectDateRange": "选择日期范围",
     "startDate": "开始日期"
   },
-  "customFilter": {
-    "filterBy": "按{{label}}筛选",
-    "allOf": "全部{{label}}"
+  "feedbackFilters": {
+    "title": "筛选",
+    "activeCount_one": "已启用 {{count}} 项",
+    "activeCount_other": "已启用 {{count}} 项",
+    "clearAll": "全部清除",
+    "clearGroup": "清除",
+    "noOptions": "此期间无数据",
+    "sources": "来源",
+    "categories": "类别",
+    "subcategories": "子类别",
+    "sentiment": "情感",
+    "urgency": "紧急程度",
+    "urgentOnly": "仅紧急",
+    "noMatches": "没有符合这些筛选条件的反馈",
+    "noMatchesHint": "请扩大时间范围或清除部分筛选条件。",
+    "loadFailed": "无法加载筛选结果。",
+    "retry": "重试",
+    "updating": "正在更新…"
+  },
+  "feedbackOverlay": {
+    "problem": "问题：",
+    "rootCause": "根本原因：",
+    "urgent": "紧急",
+    "close": "关闭",
+    "viewSource": "查看来源",
+    "openFullDetails": "打开完整详情"
+  },
+  "enrichment": {
+    "values": {
+      "unscored": "未评分"
+    },
+    "usefulness": {
+      "label": "有用性",
+      "values": {
+        "high": "高",
+        "medium": "中",
+        "low": "低"
+      }
+    }
   }
 }
