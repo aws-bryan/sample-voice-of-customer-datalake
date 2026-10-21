@@ -105,7 +105,7 @@ describe('PersonaWizard data sources', () => {
     await user.click(await screen.findByRole('button', { name: /next/i }))
 
     expect(await screen.findByText('612 reviews match these filters')).toBeInTheDocument()
-    expect(mockPreviewPersonaFeedback).toHaveBeenCalledWith('proj-1', expect.objectContaining({ days: 30 }))
+    expect(mockPreviewPersonaFeedback).toHaveBeenCalledWith('proj-1', expect.objectContaining({ days: 30 }), 'exact')
   })
 
   it('still offers personas in the research wizard, which can read them', async () => {

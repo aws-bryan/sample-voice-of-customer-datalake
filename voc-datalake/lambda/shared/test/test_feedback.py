@@ -433,6 +433,107 @@ class TestSampleFeedback:
         assert (matched, lower_bound) == (10, False)
 
 
+def _estimate_table(pages, index_count=10_000):
+    """A table whose feedback-id index scan returns ``pages`` (lists of rows) and
+    whose DescribeTable reports ``index_count`` rows on that index."""
+    import uuid
+    table = MagicMock()
+    # A fresh name per table: the index count is cached per table name.
+    table.name = f'feedback-{uuid.uuid4().hex}'
+    responses = [
+        {'Items': rows, **({'LastEvaluatedKey': {'k': i}} if i < len(pages) - 1 else {})}
+        for i, rows in enumerate(pages)
+    ]
+    table.scan.side_effect = responses
+    table.meta.client.describe_table.return_value = {'Table': {'GlobalSecondaryIndexes': [
+        {'IndexName': 'gsi1-by-date', 'ItemCount': 1},
+        {'IndexName': 'gsi4-by-feedback-id', 'ItemCount': index_count},
+    ]}}
+    return table
+
+
+def _today():
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime('%Y-%m-%d')
+
+
+class TestEstimateFeedbackMatches:
+    def test_scales_the_sample_match_rate_by_the_index_size(self):
+        from shared.feedback import estimate_feedback_matches
+        today = _today()
+        # Two pages of 100 rows, 66 of each page negative -> 66% of 10,000.
+        page = [{'date': today, 'sentiment_label': 'negative' if i < 66 else 'positive'} for i in range(100)]
+        table = _estimate_table([page, page, page, page, page])
+
+        estimate = estimate_feedback_matches(table, {'days': 30, 'sentiments': ['negative']}, pages=2)
+
+        assert estimate == 6_600
+        assert table.scan.call_count == 2
+        assert table.scan.call_args.kwargs['IndexName'] == 'gsi4-by-feedback-id'
+
+    def test_rounds_to_two_significant_figures(self):
+        from shared.feedback import estimate_feedback_matches
+        today = _today()
+        page = [{'date': today, 'sentiment_label': 'negative' if i < 67 else 'positive'} for i in range(100)]
+        table = _estimate_table([page, page], index_count=42_612)
+
+        # 0.67 * 42,612 = 28,550 -> 29,000
+        assert estimate_feedback_matches(table, {'days': 30, 'sentiments': ['negative']}, pages=1) == 29_000
+
+    def test_rows_outside_the_window_do_not_count(self):
+        from shared.feedback import estimate_feedback_matches
+        today = _today()
+        page = [{'date': today}] * 30 + [{'date': '2000-01-01'}] * 70
+        table = _estimate_table([page, page])
+
+        assert estimate_feedback_matches(table, {'days': 30}, pages=1) == 3_000
+
+    def test_too_few_matching_sample_rows_return_none_not_zero(self):
+        """A thin sample is noise, and zero would read as "nothing matches"."""
+        from shared.feedback import ESTIMATE_MIN_SAMPLE_MATCHES, estimate_feedback_matches
+        today = _today()
+        hits = ESTIMATE_MIN_SAMPLE_MATCHES - 1
+        page = [{'date': today, 'urgency': 'high' if i < hits else 'low'} for i in range(500)]
+        table = _estimate_table([page, page])
+
+        estimate = estimate_feedback_matches(table, {'days': 30, 'feedback_filters': {'urgent': True}}, pages=1)
+
+        assert estimate is None
+
+    def test_a_sample_that_covered_the_whole_index_is_an_exact_count(self):
+        from shared.feedback import estimate_feedback_matches
+        today = _today()
+        table = _estimate_table([[{'date': today}] * 7])
+
+        assert estimate_feedback_matches(table, {'days': 30}) == 7
+        table.meta.client.describe_table.assert_not_called()
+
+    def test_projects_only_the_window_date_and_the_active_filter_paths(self):
+        from shared.feedback import estimate_feedback_matches
+        table = _estimate_table([[]])
+
+        estimate_feedback_matches(table, {
+            'days': 30, 'feedback_filters': {'custom_fields': {'tier_status': ['Gold']}},
+        })
+
+        names = set(table.scan.call_args.kwargs['ExpressionAttributeNames'].values())
+        assert names == {'date', 'custom_fields', 'tier_status'}
+
+    def test_returns_none_without_a_table(self):
+        from shared.feedback import estimate_feedback_matches
+        assert estimate_feedback_matches(None, {'days': 30}) is None
+
+
+class TestRoundSignificant:
+    def test_rounds_to_two_significant_figures(self):
+        from shared.feedback import _round_significant
+        assert _round_significant(28_202) == 28_000
+        assert _round_significant(7_316) == 7_300
+        assert _round_significant(1_260) == 1_300
+        assert _round_significant(46.4) == 46
+        assert _round_significant(0.4) == 0
+
+
 class TestFormatFeedbackForLlm:
     """Tests for format_feedback_for_llm function."""
 

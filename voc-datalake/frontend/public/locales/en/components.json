@@ -64,6 +64,8 @@
       "counting": "Counting matching reviews…",
       "error": "Couldn't count matching reviews.",
       "matchesAtLeast": "{{matched}}+ reviews match these filters",
+      "matchesEstimated": "About {{matched, number}} reviews match these filters",
+      "confirming": "Confirming the exact count…",
       "matches_one": "{{count}} review matches these filters",
       "matches_other": "{{count}} reviews match these filters",
       "noMatches": "No reviews match these filters — persona generation will fail.",

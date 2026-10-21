@@ -273,8 +273,22 @@ describe('projectsApi', () => {
         urgent: 'true',
         usefulness: 'high',
         cf_tier: ['Gold', 'Platinum'],
+        mode: 'exact',
       })
-      expect(preview).toStrictEqual({ matched: 612, matched_is_lower_bound: false, sample_limit: 145 })
+      expect(preview).toStrictEqual({ matched: 612, matched_is_lower_bound: false, sample_limit: 145, estimated: false })
+    })
+
+    it('asks for a sampled estimate when the mode says so', async () => {
+      ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ matched: 28000, matched_is_lower_bound: false, sample_limit: 145, estimated: true }),
+      })
+
+      const preview = await projectsApi.previewPersonaFeedback('p1', { days: 30 }, 'estimate')
+
+      const [, options] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+      expect(JSON.parse(options.body)).toStrictEqual({ days: 30, mode: 'estimate' })
+      expect(preview.estimated).toBe(true)
     })
   })
 

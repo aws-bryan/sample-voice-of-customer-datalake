@@ -296,8 +296,13 @@ def _persona_feedback_scope(body: dict) -> dict:
 @app.post("/projects/<project_id>/personas/preview-feedback")
 @tracer.capture_method
 def api_preview_persona_feedback(project_id: str):
-    """How many reviews match a persona request, and how many it would use."""
-    return preview_persona_feedback(_persona_feedback_scope(app.current_event.json_body or {}))
+    """How many reviews match a persona request, and how many it would use.
+
+    Body ``mode``: 'exact' (default) or 'estimate' — a fast sampled estimate the
+    wizard shows while the exact count is still being read.
+    """
+    body = app.current_event.json_body or {}
+    return preview_persona_feedback(_persona_feedback_scope(body), mode=body.get('mode', 'exact'))
 
 
 @app.post("/projects/<project_id>/personas/generate")

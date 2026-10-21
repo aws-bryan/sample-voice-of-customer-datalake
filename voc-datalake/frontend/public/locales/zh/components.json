@@ -64,6 +64,8 @@
       "counting": "正在统计匹配的评论…",
       "error": "无法统计匹配的评论。",
       "matchesAtLeast": "{{matched}}+ 条评论符合这些筛选条件",
+      "matchesEstimated": "约 {{matched, number}} 条评论符合这些筛选条件",
+      "confirming": "正在确认精确数量…",
       "matches_one": "{{count}} 条评论符合这些筛选条件",
       "matches_other": "{{count}} 条评论符合这些筛选条件",
       "noMatches": "没有评论符合这些筛选条件——用户角色生成将会失败。",

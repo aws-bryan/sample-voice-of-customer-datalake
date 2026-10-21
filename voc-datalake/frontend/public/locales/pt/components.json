@@ -90,6 +90,8 @@
       "counting": "Contando avaliações correspondentes…",
       "error": "Não foi possível contar as avaliações correspondentes.",
       "matchesAtLeast": "{{matched}}+ avaliações correspondem a estes filtros",
+      "matchesEstimated": "Cerca de {{matched, number}} avaliações correspondem a estes filtros",
+      "confirming": "Confirmando a contagem exata…",
       "matches_one": "{{count}} avaliação corresponde a estes filtros",
       "matches_other": "{{count}} avaliações correspondem a estes filtros",
       "noMatches": "Nenhuma avaliação corresponde a estes filtros — a geração de personas falhará.",

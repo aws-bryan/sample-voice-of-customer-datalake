@@ -5,14 +5,21 @@ and job Lambdas (document generator, document merger).
 """
 
 import logging
+import math
 import re
 import time
 from collections.abc import Iterable
+from typing import TYPE_CHECKING, NamedTuple
 from datetime import datetime, timezone, timedelta
 
 from boto3.dynamodb.conditions import Key
 
 from shared.indexes import FEEDBACK_BY_CATEGORY_INDEX, FEEDBACK_BY_DATE_INDEX, FEEDBACK_BY_ID_INDEX
+
+if TYPE_CHECKING:
+    # Type-only: the module imports the filter model lazily (see
+    # _parse_extra_filters) to keep its runtime import graph narrow.
+    from shared.feedback_filters import FeedbackFilters
 
 logger = logging.getLogger(__name__)
 
@@ -749,22 +756,55 @@ def _projection(paths) -> tuple[str, dict[str, str]]:
     return ', '.join(expressions), {alias: part for part, alias in aliases.items()}
 
 
-def _pool_projection(sources, categories, sentiments, date_basis, by_category, extra):
+class _PoolScope(NamedTuple):
+    """A persona request's feedback scope, parsed once for the pool read and the estimate."""
+    days: int
+    sources: list[str]
+    categories: list[str]
+    sentiments: list[str]
+    date_basis: str
+    # None when no shared-model dimension is active.
+    extra: 'FeedbackFilters | None'
+
+    @property
+    def by_category(self) -> bool:
+        return bool(self.categories and not self.sources)
+
+
+def _pool_scope(filters: dict) -> _PoolScope:
+    extra = _parse_extra_filters(filters.get('feedback_filters'))
+    return _PoolScope(
+        days=min(int(filters.get('days') or 30), MAX_LOOKBACK_DAYS),
+        sources=list(filters.get('sources') or []),
+        categories=list(filters.get('categories') or []),
+        sentiments=list(filters.get('sentiments') or []),
+        date_basis=filters.get('date_basis') or DATE_BASIS_IMPORTED,
+        extra=None if extra is None or extra.is_empty else extra,
+    )
+
+
+def _filter_paths(scope: _PoolScope) -> list[tuple[str, ...]]:
+    """What the list filters and FeedbackFilters.matches read for this scope."""
+    paths: list[tuple[str, ...]] = []
+    if scope.sources:
+        paths.append(('source_platform',))
+    if scope.sentiments:
+        paths.append(('sentiment_label',))
+    if scope.categories:
+        paths.append(('category',))
+    if scope.extra is not None:
+        paths.extend(scope.extra.attribute_paths())
+    return paths
+
+
+def _pool_projection(scope: _PoolScope) -> tuple[str, dict[str, str]]:
     """Only what this request's filters read, plus the id the sample is
     fetched by. Mirrors the reads in _within_window, _apply_list_filters and
     FeedbackFilters.matches, so the projection changes no filtering answer."""
     paths: list[tuple[str, ...]] = [('feedback_id',)]
-    if by_category or date_basis == DATE_BASIS_REVIEW:
+    if scope.by_category or scope.date_basis == DATE_BASIS_REVIEW:
         paths += [('date',), ('source_created_at',)]
-    if sources:
-        paths.append(('source_platform',))
-    if sentiments:
-        paths.append(('sentiment_label',))
-    if categories and sources:
-        paths.append(('category',))
-    if extra is not None:
-        paths.extend(extra.attribute_paths())
-    return _projection(paths)
+    return _projection(paths + _filter_paths(scope))
 
 
 def read_feedback_pool(
@@ -791,20 +831,12 @@ def read_feedback_pool(
     """
     if not feedback_table:
         return [], False
-    days = min(int(filters.get('days') or 30), MAX_LOOKBACK_DAYS)
-    sources = list(filters.get('sources') or [])
-    categories = list(filters.get('categories') or [])
-    sentiments = list(filters.get('sentiments') or [])
-    date_basis = filters.get('date_basis') or DATE_BASIS_IMPORTED
-    by_category = bool(categories and not sources)
-    extra = _parse_extra_filters(filters.get('feedback_filters'))
-    if extra is not None and extra.is_empty:
-        extra = None
-    projection = _pool_projection(sources, categories, sentiments, date_basis, by_category, extra)
+    scope = _pool_scope(filters)
+    projection = _pool_projection(scope)
 
     rows: list[dict] = []
     capped = False
-    for index_name, key_expr in _window_partitions(days, sources, categories):
+    for index_name, key_expr in _window_partitions(scope.days, scope.sources, scope.categories):
         rows.extend(_query_all_pages(
             feedback_table, index_name=index_name, key_expr=key_expr,
             max_items=max_rows - len(rows), projection=projection, deadline=deadline,
@@ -816,11 +848,122 @@ def read_feedback_pool(
             capped = True
             break
 
-    rows = _within_window(rows, days, date_basis, by_category)
-    rows = _apply_list_filters(rows, sources, sentiments, categories)
-    if extra is not None:
-        rows = [row for row in rows if extra.matches(row)]
+    rows = _within_window(rows, scope.days, scope.date_basis, scope.by_category)
+    rows = _apply_list_filters(rows, scope.sources, scope.sentiments, scope.categories)
+    if scope.extra is not None:
+        rows = [row for row in rows if scope.extra.matches(row)]
     return rows, capped
+
+
+# --- Fast match estimate -----------------------------------------------------
+# The exact count above reads every row in the window, and a bulk import puts a
+# whole corpus in one date partition, which DynamoDB serves at about 3,000 read
+# units a second: 93MB is ~4s however it is projected or parallelised (a
+# segmented parallel scan measured slower, not faster). So the wizard asks for a
+# quick estimate first and the exact count second.
+#
+# The sample comes from the feedback-id index, NOT the date index. Each row there
+# is its own partition and feedback ids are hashes, so a Scan returns rows in an
+# order unrelated to how or when they were imported — a random sample. The date
+# index returns import order: its first page under-counted the Gold/Platinum
+# match on f by 5% (26,945), while 4 pages of the id index (1,860 rows, 0.31s)
+# estimated 28,202 against an exact 28,374.
+ESTIMATE_SAMPLE_PAGES = 4
+
+# Fewer matching sample rows than this is too noisy to show, and a zero would read
+# as "nothing matches"; the caller then waits for the exact count instead.
+ESTIMATE_MIN_SAMPLE_MATCHES = 20
+
+# How long the index's row count (DescribeTable, which AWS itself refreshes about
+# every six hours) is reused before it is asked for again.
+_INDEX_COUNT_TTL_SECONDS = 600
+_index_count_cache: dict[str, tuple[float, int]] = {}
+
+
+def _indexed_feedback_count(feedback_table) -> int:
+    """Approximate number of feedback rows: the feedback-id index's ItemCount."""
+    now = time.monotonic()
+    cached = _index_count_cache.get(feedback_table.name)
+    if cached is not None and now - cached[0] < _INDEX_COUNT_TTL_SECONDS:
+        return cached[1]
+    table = feedback_table.meta.client.describe_table(TableName=feedback_table.name)['Table']
+    count = next(
+        (int(index.get('ItemCount') or 0)
+         for index in table.get('GlobalSecondaryIndexes') or []
+         if index.get('IndexName') == FEEDBACK_BY_ID_INDEX),
+        0,
+    )
+    _index_count_cache[feedback_table.name] = (now, count)
+    return count
+
+
+def _round_significant(value: float, digits: int = 2) -> int:
+    """``value`` to ``digits`` significant figures (28,202 -> 28,000), so an
+    estimate does not claim precision it does not have."""
+    if value < 1:
+        return 0
+    step = 10 ** max(int(math.floor(math.log10(value))) - (digits - 1), 0)
+    return int(round(value / step) * step)
+
+
+def _sample_matches(rows: list[dict], scope: _PoolScope) -> list[dict]:
+    """The sample rows the exact read would count. Sampled rows span every
+    date, so the window is checked on the import date (the date index's
+    partitions) and, for the review basis, on the review date too."""
+    cutoff = window_cutoff(scope.days)
+    rows = [
+        row for row in rows
+        if row.get('date', '') >= cutoff and basis_date(row, scope.date_basis) >= cutoff
+    ]
+    rows = _apply_list_filters(rows, scope.sources, scope.sentiments, [])
+    if scope.categories:
+        rows = [row for row in rows if row.get('category') in scope.categories]
+    if scope.extra is not None:
+        rows = [row for row in rows if scope.extra.matches(row)]
+    return rows
+
+
+def estimate_feedback_matches(
+    feedback_table, filters: dict, pages: int = ESTIMATE_SAMPLE_PAGES,
+) -> int | None:
+    """A fast estimate of how many rows :func:`read_feedback_pool` would match.
+
+    Returns:
+        The estimate (rounded to two significant figures; exact when the sample
+        happened to cover every row), or None when the sample is too thin to
+        say anything — the caller should wait for the exact count.
+    """
+    if not feedback_table:
+        return None
+    scope = _pool_scope(filters)
+    paths = [('date',), *([('source_created_at',)] if scope.date_basis == DATE_BASIS_REVIEW else [])]
+    expression, names = _projection(paths + _filter_paths(scope))
+    kwargs = {
+        'IndexName': FEEDBACK_BY_ID_INDEX,
+        'ProjectionExpression': expression,
+        'ExpressionAttributeNames': names,
+    }
+    sample: list[dict] = []
+    complete = False
+    for _ in range(pages):
+        response = feedback_table.scan(**kwargs)
+        sample.extend(response.get('Items', []))
+        last_key = response.get('LastEvaluatedKey')
+        if not last_key:
+            complete = True
+            break
+        kwargs['ExclusiveStartKey'] = last_key
+
+    matched = len(_sample_matches(sample, scope))
+    if complete:
+        # The "sample" is the whole index: this is a count, not an estimate.
+        return matched if matched else None
+    if matched < ESTIMATE_MIN_SAMPLE_MATCHES:
+        return None
+    total = _indexed_feedback_count(feedback_table)
+    if total <= 0:
+        return None
+    return _round_significant(matched / len(sample) * total)
 
 
 def sample_evenly(rows: list[dict], size: int) -> list[dict]:

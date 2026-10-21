@@ -930,11 +930,26 @@ function personaScopeParams(body) {
   return params;
 }
 
+/** `value` to two significant figures, as the real estimate is reported. */
+function roundSignificant(value) {
+  if (value < 1) return 0;
+  const step = 10 ** Math.max(Math.floor(Math.log10(value)) - 1, 0);
+  return Math.round(value / step) * step;
+}
+
+// The real exact count reads every matching review (~4-7s on a 40k corpus) while
+// the estimate answers in ~0.3s. A short delay on 'exact' keeps that ordering
+// visible locally, so the "About N … confirming" state can be seen and styled.
+const MOCK_EXACT_PREVIEW_DELAY_MS = 800;
+
 function previewPersonaFeedback(body) {
+  const matched = filteredWindow(personaScopeParams(body)).length;
+  const estimated = body.mode === 'estimate';
   return {
-    matched: filteredWindow(personaScopeParams(body)).length,
+    matched: estimated ? roundSignificant(matched) : matched,
     matched_is_lower_bound: false,
     sample_limit: PERSONA_SAMPLE_LIMIT,
+    estimated,
   };
 }
 
@@ -1331,8 +1346,11 @@ const server = http.createServer((req, res) => {
   // The persona wizard's live "N reviews match" count.
   if (req.method === 'POST' && /^\/projects\/[^/]+\/personas\/preview-feedback$/.test(url.pathname)) {
     collectJson(req, res, (body) => {
-      res.writeHead(200);
-      res.end(JSON.stringify(previewPersonaFeedback(body ?? {})));
+      const preview = previewPersonaFeedback(body ?? {});
+      setTimeout(() => {
+        res.writeHead(200);
+        res.end(JSON.stringify(preview));
+      }, preview.estimated ? 0 : MOCK_EXACT_PREVIEW_DELAY_MS);
     });
     return;
   }

@@ -97,13 +97,16 @@ describe('PersonaFeedbackPreview', () => {
     })
 
     await screen.findByText('3 reviews match these filters')
-    expect(mockPreviewPersonaFeedback).toHaveBeenCalledWith('proj-1', {
+    const scope = {
       sources: ['webscraper'],
       categories: ['billing'],
       sentiments: [],
       days: 90,
       extraFilters: { urgent: 'true' },
-    })
+    }
+    // The same scope for both: the estimate and the exact count describe one set.
+    expect(mockPreviewPersonaFeedback).toHaveBeenCalledWith('proj-1', scope, 'exact')
+    expect(mockPreviewPersonaFeedback).toHaveBeenCalledWith('proj-1', scope, 'estimate')
   })
 
   it('re-counts once, after the filters stop changing', async () => {
@@ -114,11 +117,71 @@ describe('PersonaFeedbackPreview', () => {
 
     rerenderWith({ ...defaultContextConfig, sentiments: ['negative'] })
     rerenderWith({ ...defaultContextConfig, sentiments: ['negative', 'mixed'] })
-    expect(mockPreviewPersonaFeedback).toHaveBeenCalledTimes(1)
+    // One estimate + one exact count per settled selection.
+    expect(mockPreviewPersonaFeedback).toHaveBeenCalledTimes(2)
 
     await act(() => vi.advanceTimersByTimeAsync(PERSONA_PREVIEW_DEBOUNCE_MS))
 
-    expect(mockPreviewPersonaFeedback).toHaveBeenCalledTimes(2)
-    expect(mockPreviewPersonaFeedback).toHaveBeenLastCalledWith('proj-1', expect.objectContaining({ sentiments: ['negative', 'mixed'] }))
+    expect(mockPreviewPersonaFeedback).toHaveBeenCalledTimes(4)
+    expect(mockPreviewPersonaFeedback).toHaveBeenLastCalledWith(
+      'proj-1', expect.objectContaining({ sentiments: ['negative', 'mixed'] }), expect.any(String),
+    )
+  })
+})
+
+describe('PersonaFeedbackPreview estimate-then-exact', () => {
+  const ESTIMATE = { matched: 28000, matched_is_lower_bound: false, sample_limit: 145, estimated: true }
+  const EXACT = { matched: 28374, matched_is_lower_bound: false, sample_limit: 145, estimated: false }
+
+  /** Answer each mode independently; `exact` is controlled by the test. */
+  function answerByMode(exact: () => Promise<unknown>, estimate: unknown = ESTIMATE) {
+    mockPreviewPersonaFeedback.mockImplementation((_projectId: string, _body: unknown, mode: string) => (
+      mode === 'estimate' ? Promise.resolve(estimate) : exact()
+    ))
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows the estimate, marked as being confirmed, while the exact count is still loading', async () => {
+    answerByMode(() => new Promise(() => {}))
+    renderPreview()
+
+    expect(await screen.findByText('About 28,000 reviews match these filters')).toBeInTheDocument()
+    expect(screen.getByText('Confirming the exact count…')).toBeInTheDocument()
+    expect(screen.getByText('Personas use an even sample of 145 of them.')).toBeInTheDocument()
+  })
+
+  it('replaces the estimate with the exact count when it arrives', async () => {
+    const exact = Promise.withResolvers<unknown>()
+    answerByMode(() => exact.promise)
+    renderPreview()
+    await screen.findByText('About 28,000 reviews match these filters')
+
+    await act(async () => { exact.resolve(EXACT) })
+
+    expect(await screen.findByText('28374 reviews match these filters')).toBeInTheDocument()
+    expect(screen.queryByText(/About/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Confirming the exact count…')).not.toBeInTheDocument()
+  })
+
+  it('keeps counting, and never warns of zero, when the estimate is too thin to give', async () => {
+    answerByMode(() => new Promise(() => {}), { ...ESTIMATE, matched: null })
+    renderPreview()
+
+    expect(await screen.findByText('Counting matching reviews…')).toBeInTheDocument()
+    expect(screen.queryByText(/persona generation will fail/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the estimate without the confirming note when the exact count fails', async () => {
+    answerByMode(() => Promise.reject(new Error('API Error: 504')))
+    renderPreview()
+
+    expect(await screen.findByText('About 28,000 reviews match these filters')).toBeInTheDocument()
+    await vi.waitFor(() => {
+      expect(screen.queryByText('Confirming the exact count…')).not.toBeInTheDocument()
+    })
+    expect(screen.queryByText("Couldn't count matching reviews.")).not.toBeInTheDocument()
   })
 })

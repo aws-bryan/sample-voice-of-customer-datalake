@@ -90,6 +90,8 @@
       "counting": "Comptage des avis correspondants…",
       "error": "Impossible de compter les avis correspondants.",
       "matchesAtLeast": "{{matched}}+ avis correspondent à ces filtres",
+      "matchesEstimated": "Environ {{matched, number}} avis correspondent à ces filtres",
+      "confirming": "Confirmation du nombre exact…",
       "matches_one": "{{count}} avis correspond à ces filtres",
       "matches_other": "{{count}} avis correspondent à ces filtres",
       "noMatches": "Aucun avis ne correspond à ces filtres — la génération des personas échouera.",

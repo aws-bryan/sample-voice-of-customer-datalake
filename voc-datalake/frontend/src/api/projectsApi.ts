@@ -6,7 +6,7 @@ import { normalizePersonaFeedbackPreview, normalizePersonaSourceFeedback } from 
 import { normalizeProjectDetail } from './projectDetailSchema'
 import type { FilterParamValue } from './feedbackFilters'
 import type {
-  PersonaFeedbackPreview, PersonaFeedbackScope, PersonaSourceFeedbackPage,
+  PersonaFeedbackPreview, PersonaFeedbackScope, PersonaPreviewMode, PersonaSourceFeedbackPage,
 } from './personaFeedbackSchema'
 import type {
   Project, ProjectDetail, ProjectPersona, ProjectDocument, ProjectJob,
@@ -137,10 +137,12 @@ export const projectsApi = {
 
   // How many reviews a generation with this scope would match, and how many of
   // them it would sample. Built exactly like generatePersonas' body (above).
-  previewPersonaFeedback: async (projectId: string, body: PersonaPreviewBody): Promise<PersonaFeedbackPreview> => {
+  previewPersonaFeedback: async (
+    projectId: string, body: PersonaPreviewBody, mode: PersonaPreviewMode = 'exact',
+  ): Promise<PersonaFeedbackPreview> => {
     const raw = await fetchApi<unknown>(`/projects/${encodeURIComponent(projectId)}/personas/preview-feedback`, {
       method: 'POST',
-      body: JSON.stringify(mergeFilterBody(getDateBasisBodyParams(), body)),
+      body: JSON.stringify({ ...mergeFilterBody(getDateBasisBodyParams(), body), mode }),
     })
     return normalizePersonaFeedbackPreview(raw)
   },

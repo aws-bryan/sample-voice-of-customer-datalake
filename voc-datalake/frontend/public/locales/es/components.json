@@ -90,6 +90,8 @@
       "counting": "Contando reseñas coincidentes…",
       "error": "No se pudieron contar las reseñas coincidentes.",
       "matchesAtLeast": "{{matched}}+ reseñas coinciden con estos filtros",
+      "matchesEstimated": "Unas {{matched, number}} reseñas coinciden con estos filtros",
+      "confirming": "Confirmando el recuento exacto…",
       "matches_one": "{{count}} reseña coincide con estos filtros",
       "matches_other": "{{count}} reseñas coinciden con estos filtros",
       "noMatches": "Ninguna reseña coincide con estos filtros: la generación de personas fallará.",

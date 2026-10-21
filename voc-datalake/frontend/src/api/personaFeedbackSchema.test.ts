@@ -88,8 +88,16 @@ describe('optionalProvenanceSchema', () => {
 
 describe('normalizePersonaFeedbackPreview', () => {
   it('keeps a well-formed preview', () => {
-    expect(normalizePersonaFeedbackPreview({ matched: 612, matched_is_lower_bound: true, sample_limit: 145 }))
-      .toStrictEqual({ matched: 612, matched_is_lower_bound: true, sample_limit: 145 })
+    expect(normalizePersonaFeedbackPreview({ matched: 612, matched_is_lower_bound: true, sample_limit: 145, estimated: false }))
+      .toStrictEqual({ matched: 612, matched_is_lower_bound: true, sample_limit: 145, estimated: false })
+  })
+
+  it('keeps the estimated flag of a sampled preview', () => {
+    expect(normalizePersonaFeedbackPreview({ matched: 28000, sample_limit: 145, estimated: true }).estimated).toBe(true)
+  })
+
+  it('reads a preview from an older server, which never estimated, as exact', () => {
+    expect(normalizePersonaFeedbackPreview({ matched: 612, sample_limit: 145 }).estimated).toBe(false)
   })
 
   it('keeps a real zero match count', () => {
@@ -97,12 +105,12 @@ describe('normalizePersonaFeedbackPreview', () => {
   })
 
   it('reads unreadable counts as unknown rather than zero', () => {
-    expect(normalizePersonaFeedbackPreview({ matched: '12', matched_is_lower_bound: 1, sample_limit: null }))
-      .toStrictEqual({ matched: null, matched_is_lower_bound: false, sample_limit: null })
+    expect(normalizePersonaFeedbackPreview({ matched: '12', matched_is_lower_bound: 1, sample_limit: null, estimated: 'yes' }))
+      .toStrictEqual({ matched: null, matched_is_lower_bound: false, sample_limit: null, estimated: false })
   })
 
   it('reads a non-object response as an unknown preview instead of throwing', () => {
     expect(normalizePersonaFeedbackPreview('nope'))
-      .toStrictEqual({ matched: null, matched_is_lower_bound: false, sample_limit: null })
+      .toStrictEqual({ matched: null, matched_is_lower_bound: false, sample_limit: null, estimated: false })
   })
 })

@@ -64,6 +64,8 @@
       "counting": "Passende Bewertungen werden gezählt…",
       "error": "Passende Bewertungen konnten nicht gezählt werden.",
       "matchesAtLeast": "{{matched}}+ Bewertungen entsprechen diesen Filtern",
+      "matchesEstimated": "Etwa {{matched, number}} Bewertungen entsprechen diesen Filtern",
+      "confirming": "Genaue Anzahl wird bestätigt…",
       "matches_one": "{{count}} Bewertung entspricht diesen Filtern",
       "matches_other": "{{count}} Bewertungen entsprechen diesen Filtern",
       "noMatches": "Keine Bewertung entspricht diesen Filtern – die Persona-Generierung wird fehlschlagen.",

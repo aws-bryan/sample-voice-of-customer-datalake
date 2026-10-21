@@ -34,6 +34,7 @@ from shared.prompts import (
 )
 from shared.feedback import (
     get_feedback_context as _get_feedback_context,
+    estimate_feedback_matches as _estimate_feedback_matches,
     get_feedback_by_ids as _get_feedback_by_ids,
     read_feedback_pool as _read_feedback_pool,
     sample_feedback as _sample_feedback,
@@ -287,24 +288,99 @@ def sample_persona_feedback(filters: dict, sample_size: int) -> tuple[list[dict]
 # date is one index partition and DynamoDB can throttle it to far longer.
 PERSONA_PREVIEW_READ_SECONDS = 20
 
+# What the wizard asks for: a fast sampled estimate (~0.3s) and the exact count
+# (~4-7s on f), concurrently, so a number appears at once and is then confirmed.
+PERSONA_PREVIEW_MODES = ('exact', 'estimate')
 
-def preview_persona_feedback(filters: dict) -> dict:
+# Previews are reused for this long, per container. Toggling a filter off and on
+# again, or returning to the step, then answers immediately. Five minutes keeps a
+# count no staler than the wizard session it serves; a fresh import shows up once
+# it expires (or in another container, which has its own cache).
+PERSONA_PREVIEW_CACHE_SECONDS = 300
+PERSONA_PREVIEW_CACHE_MAX_ENTRIES = 128
+_preview_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _canonical(value):
+    """``value`` with lists sorted and dict keys ordered, so the same selection
+    made in a different click order is the same cache key."""
+    if isinstance(value, dict):
+        return {key: _canonical(value[key]) for key in sorted(value)}
+    if isinstance(value, (list, tuple)):
+        return sorted((_canonical(item) for item in value), key=str)
+    return value
+
+
+def _preview_cache_key(filters: dict, mode: str) -> str:
+    scope = {key: filters.get(key) for key in (
+        'days', 'date_basis', 'sources', 'categories', 'sentiments', 'feedback_filters',
+    )}
+    return json.dumps({'mode': mode, **_canonical(scope)}, sort_keys=True, default=str)
+
+
+def _cached_preview(key: str, now: float) -> dict | None:
+    hit = _preview_cache.get(key)
+    if hit is None or now - hit[0] >= PERSONA_PREVIEW_CACHE_SECONDS:
+        return None
+    return hit[1]
+
+
+def _store_preview(key: str, now: float, result: dict) -> None:
+    _preview_cache.pop(key, None)
+    _preview_cache[key] = (now, result)
+    while len(_preview_cache) > PERSONA_PREVIEW_CACHE_MAX_ENTRIES:
+        # Insertion order is age order (a re-store moves the key to the end).
+        _preview_cache.pop(next(iter(_preview_cache)))
+
+
+def preview_persona_feedback(filters: dict, mode: str = 'exact') -> dict:
     """How much feedback a persona generation with ``filters`` would draw from.
 
-    Reads the same pool generation samples from, so the wizard's number and the
-    job's input describe one set. Unlike generation (a 15-minute job, which
-    reads to the end), it must answer inside a request timeout, so a slow read
-    stops at PERSONA_PREVIEW_READ_SECONDS and reports its count as a lower bound.
+    'exact' reads the same pool generation samples from, so the wizard's number
+    and the job's input describe one set. Unlike generation (a 15-minute job,
+    which reads to the end), it must answer inside a request timeout, so a slow
+    read stops at PERSONA_PREVIEW_READ_SECONDS and reports a lower bound.
+
+    'estimate' scales a random sample instead (see
+    shared/feedback.py::estimate_feedback_matches); ``matched`` is None when the
+    sample is too thin to say. It answers with the exact count when one is
+    already cached, since that is strictly better.
     """
-    pool, capped = _read_feedback_pool(
-        feedback_table, filters, deadline=time.monotonic() + PERSONA_PREVIEW_READ_SECONDS,
-    )
+    if mode not in PERSONA_PREVIEW_MODES:
+        raise ValidationError(f"mode must be one of: {', '.join(PERSONA_PREVIEW_MODES)}")
+    now = time.monotonic()
+    exact_key = _preview_cache_key(filters, 'exact')
+    cached = _cached_preview(exact_key, now)
+    if cached is None and mode == 'estimate':
+        cached = _cached_preview(_preview_cache_key(filters, 'estimate'), now)
+    if cached is not None:
+        return cached
+
     _, sample_limit = persona_context_budget()
-    return {
+    if mode == 'estimate':
+        result = {
+            'matched': _estimate_feedback_matches(feedback_table, filters),
+            'matched_is_lower_bound': False,
+            'sample_limit': sample_limit,
+            'estimated': True,
+        }
+        _store_preview(_preview_cache_key(filters, 'estimate'), now, result)
+        return result
+
+    pool, capped = _read_feedback_pool(
+        feedback_table, filters, deadline=now + PERSONA_PREVIEW_READ_SECONDS,
+    )
+    result = {
         'matched': len(pool),
         'matched_is_lower_bound': capped,
         'sample_limit': sample_limit,
+        'estimated': False,
     }
+    # A read cut short by the deadline might finish next time; only a complete
+    # count is worth reusing.
+    if not capped:
+        _store_preview(exact_key, now, result)
+    return result
 
 
 projects_table = get_projects_table()

@@ -64,6 +64,8 @@
       "counting": "일치하는 리뷰를 세는 중…",
       "error": "일치하는 리뷰 수를 확인할 수 없습니다.",
       "matchesAtLeast": "이 필터와 일치하는 리뷰 {{matched}}개 이상",
+      "matchesEstimated": "이 필터와 일치하는 리뷰 약 {{matched, number}}개",
+      "confirming": "정확한 개수를 확인하는 중…",
       "matches_one": "이 필터와 일치하는 리뷰 {{count}}개",
       "matches_other": "이 필터와 일치하는 리뷰 {{count}}개",
       "noMatches": "이 필터와 일치하는 리뷰가 없습니다. 페르소나 생성이 실패합니다.",

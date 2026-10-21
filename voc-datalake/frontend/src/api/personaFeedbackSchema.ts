@@ -61,13 +61,28 @@ export interface PersonaSourceFeedbackPage {
   readonly provenance: PersonaFeedbackProvenance | null
 }
 
+/**
+ * 'estimate' scales a random sample (~0.3s); 'exact' reads every matching review
+ * (~4-7s on a 40k-review corpus). The wizard asks for both at once.
+ */
+export const PERSONA_PREVIEW_MODES = ['exact', 'estimate'] as const
+export type PersonaPreviewMode = (typeof PERSONA_PREVIEW_MODES)[number]
+
 export interface PersonaFeedbackPreview {
-  /** Reviews matching the filters; null when the response did not say. */
+  /**
+   * Reviews matching the filters; null when the response did not say, or when an
+   * estimate's sample was too thin to give one.
+   */
   readonly matched: number | null
   /** The count stopped at a row cap: there are at least `matched`. */
   readonly matched_is_lower_bound: boolean
   /** How many of them persona generation samples; null when the response did not say. */
   readonly sample_limit: number | null
+  /**
+   * `matched` is a sampled estimate (rounded), not a count. False whenever the
+   * server answered an estimate request from an exact count it already had.
+   */
+  readonly estimated: boolean
 }
 
 /** Non-objects (null, arrays, strings) parse as an empty record, so every field defaults. */
@@ -90,6 +105,8 @@ const FeedbackPreviewSchema = z.preprocess(asRecordOrEmpty, z.object({
   matched: count.nullable().catch(null),
   matched_is_lower_bound: z.boolean().catch(false),
   sample_limit: count.nullable().catch(null),
+  // Absent from older servers, whose counts were always exact.
+  estimated: z.boolean().catch(false),
 }))
 
 /** Feedback rows, dropping entries that are not objects at all. */

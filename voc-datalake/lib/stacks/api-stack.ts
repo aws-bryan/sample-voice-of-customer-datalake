@@ -688,7 +688,10 @@ export class VocApiStack extends VocStack {
       code: createApiLambdaCode('projects_handler.py'),
       role: projectsRole,
       timeout: cdk.Duration.seconds(30),
-      memorySize: 512,
+      // 1024, not 512: Lambda CPU scales with memory, and the persona wizard's
+      // exact preview count is CPU-bound past DynamoDB's read floor (unpacking
+      // ~42k projected rows took it from 3.9s to 6.5s at 512MB on the f corpus).
+      memorySize: 1024,
       environment: {
         PROJECTS_TABLE: projectsTable.tableName,
         FEEDBACK_TABLE: feedbackTable.tableName,

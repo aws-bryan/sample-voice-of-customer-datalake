@@ -5,6 +5,18 @@ POST /projects/<id>/personas/preview-feedback         — how much feedback a re
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _empty_preview_cache():
+    """The preview cache lives for the container, so one test's count would
+    otherwise answer the next test's request."""
+    import projects
+    projects._preview_cache.clear()
+    yield
+    projects._preview_cache.clear()
+
 
 PERSONA_ROW = {
     'persona_id': 'p1',
@@ -107,7 +119,7 @@ class TestPersonaSourceFeedbackRoute:
 
 class TestPersonaFeedbackPreviewRoute:
     @staticmethod
-    def _post(api_gateway_event, lambda_context, body, pool):
+    def _post(api_gateway_event, lambda_context, body, pool, estimate=None):
         from projects_handler import lambda_handler
 
         event = api_gateway_event(
@@ -116,26 +128,108 @@ class TestPersonaFeedbackPreviewRoute:
             path_params={'project_id': 'proj-1'},
             body=body,
         )
-        with patch('projects._read_feedback_pool', return_value=pool) as read:
+        with patch('projects._read_feedback_pool', return_value=pool) as read, \
+             patch('projects._estimate_feedback_matches', return_value=estimate) as estimator:
             response = lambda_handler(event, lambda_context)
-        return response, json.loads(response['body']), read
+        return response, json.loads(response['body']), read, estimator
 
     def test_returns_the_match_count_and_the_sample_limit(self, api_gateway_event, lambda_context):
         import projects
 
-        response, body, _ = self._post(api_gateway_event, lambda_context,
-                                       {'days': 30}, ([{}] * 900, False))
+        response, body, _, estimator = self._post(api_gateway_event, lambda_context,
+                                                  {'days': 30}, ([{}] * 900, False))
 
         assert response['statusCode'] == 200
         assert body == {
             'matched': 900,
             'matched_is_lower_bound': False,
             'sample_limit': projects.persona_context_budget()[1],
+            'estimated': False,
         }
+        estimator.assert_not_called()
+
+    def test_estimate_mode_answers_from_the_sample_without_the_full_read(
+        self, api_gateway_event, lambda_context,
+    ):
+        response, body, read, estimator = self._post(
+            api_gateway_event, lambda_context, {'days': 30, 'mode': 'estimate'},
+            ([], False), estimate=28_000,
+        )
+
+        assert response['statusCode'] == 200
+        assert body['matched'] == 28_000
+        assert body['estimated'] is True
+        read.assert_not_called()
+        estimator.assert_called_once()
+
+    def test_an_estimate_too_thin_to_show_is_null_not_zero(self, api_gateway_event, lambda_context):
+        """Zero means "generation will fail"; a thin sample must not say that."""
+        _, body, _, _ = self._post(api_gateway_event, lambda_context,
+                                   {'mode': 'estimate'}, ([], False), estimate=None)
+        assert body['matched'] is None
+
+    def test_an_unknown_mode_is_a_400(self, api_gateway_event, lambda_context):
+        response, body, read, _ = self._post(api_gateway_event, lambda_context,
+                                             {'mode': 'guess'}, ([], False))
+        assert response['statusCode'] == 400
+        assert 'mode' in body['error']
+        read.assert_not_called()
+
+    def test_a_repeated_exact_count_is_answered_from_the_cache(self, api_gateway_event, lambda_context):
+        """Toggling a filter off and on again must not re-read the window."""
+        from projects_handler import lambda_handler
+
+        def event(body):
+            return api_gateway_event(
+                method='POST', path='/projects/proj-1/personas/preview-feedback',
+                path_params={'project_id': 'proj-1'}, body=body,
+            )
+
+        with patch('projects._read_feedback_pool', return_value=([{}] * 7, False)) as read:
+            lambda_handler(event({'days': 30, 'sentiments': ['negative', 'mixed']}), lambda_context)
+            # Same selection, different click order: still one read.
+            second = lambda_handler(event({'days': 30, 'sentiments': ['mixed', 'negative']}), lambda_context)
+
+        assert read.call_count == 1
+        assert json.loads(second['body'])['matched'] == 7
+
+    def test_a_cut_short_count_is_not_cached(self, api_gateway_event, lambda_context):
+        """A read stopped by the deadline may finish next time."""
+        from projects_handler import lambda_handler
+
+        event = api_gateway_event(
+            method='POST', path='/projects/proj-1/personas/preview-feedback',
+            path_params={'project_id': 'proj-1'}, body={'days': 30},
+        )
+        with patch('projects._read_feedback_pool', return_value=([{}] * 3, True)) as read:
+            lambda_handler(event, lambda_context)
+            lambda_handler(event, lambda_context)
+
+        assert read.call_count == 2
+
+    def test_an_estimate_request_gets_the_exact_count_once_it_is_cached(
+        self, api_gateway_event, lambda_context,
+    ):
+        from projects_handler import lambda_handler
+
+        def event(body):
+            return api_gateway_event(
+                method='POST', path='/projects/proj-1/personas/preview-feedback',
+                path_params={'project_id': 'proj-1'}, body=body,
+            )
+
+        with patch('projects._read_feedback_pool', return_value=([{}] * 42, False)), \
+             patch('projects._estimate_feedback_matches', return_value=40) as estimator:
+            lambda_handler(event({'days': 30}), lambda_context)
+            response = lambda_handler(event({'days': 30, 'mode': 'estimate'}), lambda_context)
+
+        body = json.loads(response['body'])
+        assert (body['matched'], body['estimated']) == (42, False)
+        estimator.assert_not_called()
 
     def test_counts_with_the_same_scope_generation_uses(self, api_gateway_event, lambda_context):
         """The shared-model filters reach the count exactly as they reach a job."""
-        _, _, read = self._post(api_gateway_event, lambda_context, {
+        _, _, read, _ = self._post(api_gateway_event, lambda_context, {
             'days': 14,
             'sentiments': ['negative'],
             'custom_fields': {'tier_status': ['Gold']},
@@ -150,7 +244,7 @@ class TestPersonaFeedbackPreviewRoute:
         }
 
     def test_reports_a_lower_bound_count(self, api_gateway_event, lambda_context):
-        _, body, _ = self._post(api_gateway_event, lambda_context, {}, ([{}] * 3, True))
+        _, body, _, _ = self._post(api_gateway_event, lambda_context, {}, ([{}] * 3, True))
         assert body['matched_is_lower_bound'] is True
 
     def test_the_count_is_bounded_to_answer_inside_the_request_timeout(
@@ -162,7 +256,7 @@ class TestPersonaFeedbackPreviewRoute:
         import projects
 
         before = time.monotonic()
-        _, _, read = self._post(api_gateway_event, lambda_context, {}, ([], False))
+        _, _, read, _ = self._post(api_gateway_event, lambda_context, {}, ([], False))
 
         deadline = read.call_args.kwargs['deadline']
         assert before < deadline <= time.monotonic() + projects.PERSONA_PREVIEW_READ_SECONDS
