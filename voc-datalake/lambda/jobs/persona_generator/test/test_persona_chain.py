@@ -290,6 +290,78 @@ class TestReplaceSemantics:
         values = projects_table.update_item.call_args.kwargs['ExpressionAttributeValues']
         assert values[':count'] == 3
 
+    def test_a_persona_that_fails_to_delete_is_counted_and_the_rest_still_go(
+        self, projects_table, feedback, chain, avatars
+    ):
+        """A throttled delete leaves its row in place. Raising would skip every
+        later delete and write a count that ignores the rows still there."""
+        from botocore.exceptions import ClientError
+        from api.projects import generate_personas
+
+        projects_table.query.return_value = {'Items': [
+            {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#stuck'},
+            {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#old'},
+        ]}
+        throttled = ClientError({'Error': {'Code': 'ProvisionedThroughputExceededException'}}, 'DeleteItem')
+        projects_table.delete_item.side_effect = [throttled, {}]
+
+        result = generate_personas('proj-1', {'persona_count': 2})
+
+        deleted = [c.kwargs['Key']['sk'] for c in projects_table.delete_item.call_args_list]
+        assert deleted == ['PERSONA#stuck', 'PERSONA#old']
+        assert len(result['personas']) == 2
+        # 'stuck' is still a row, so it is part of the count beside the two new ones.
+        values = projects_table.update_item.call_args.kwargs['ExpressionAttributeValues']
+        assert values[':count'] == 3
+
+    def test_personas_past_the_first_query_page_are_kept_or_cleared_too(
+        self, projects_table, feedback, chain, avatars
+    ):
+        from api.projects import generate_personas
+
+        first_page = {
+            'Items': [{'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#old-1'}],
+            'LastEvaluatedKey': {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#old-1'},
+        }
+        second_page = {'Items': [
+            {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#keep', 'name': 'Darlene', 'protected': True},
+            {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#old-2'},
+        ]}
+
+        def paged_query(**kwargs):
+            return second_page if 'ExclusiveStartKey' in kwargs else first_page
+
+        projects_table.query.side_effect = paged_query
+
+        generate_personas('proj-1', {'persona_count': 2})
+
+        deleted = {c.kwargs['Key']['sk'] for c in projects_table.delete_item.call_args_list}
+        assert deleted == {'PERSONA#old-1', 'PERSONA#old-2'}
+        values = projects_table.update_item.call_args.kwargs['ExpressionAttributeValues']
+        assert values[':count'] == 3
+        # The protected persona on page two still reaches the prompt.
+        assert all('Darlene' in step['user'] for step in chain.call_args.args[0])
+
+    def test_a_failed_read_of_protected_personas_only_drops_the_prompt_hint(
+        self, projects_table, feedback, chain, avatars
+    ):
+        """The prompt read is best-effort; the delete step re-reads protection
+        itself, so the protected persona is still kept."""
+        from api.projects import generate_personas
+
+        rows = {'Items': [
+            {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#keep', 'name': 'Darlene', 'protected': True},
+            {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#old'},
+        ]}
+        projects_table.query.side_effect = [RuntimeError('throttled'), rows]
+
+        result = generate_personas('proj-1', {'persona_count': 2})
+
+        assert len(result['personas']) == 2
+        assert all('EXISTING PERSONAS' not in step['user'] for step in chain.call_args.args[0])
+        deleted = {c.kwargs['Key']['sk'] for c in projects_table.delete_item.call_args_list}
+        assert deleted == {'PERSONA#old'}
+
     def test_protected_personas_are_named_to_the_model_so_it_does_not_recreate_them(
         self, projects_table, feedback, chain, avatars
     ):

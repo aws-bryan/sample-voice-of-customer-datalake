@@ -426,6 +426,10 @@ def _delete_unprotected_personas(project_id: str) -> tuple[int, int]:
     Protection is re-read here rather than taken from the start of the run, and
     each delete is conditional on the row still being unprotected: generation
     takes minutes, and a persona protected meanwhile must survive it.
+
+    A row whose delete fails for any other reason is still there, so it counts
+    as kept and the loop moves on: the caller writes ``kept + new`` as the
+    project's persona count, which must match the rows that actually remain.
     """
     existing = _query_project_personas(project_id)
     deleted = 0
@@ -442,7 +446,7 @@ def _delete_unprotected_personas(project_id: str) -> tuple[int, int]:
             deleted += 1
         except ClientError as e:
             if e.response.get('Error', {}).get('Code') != 'ConditionalCheckFailedException':
-                raise
+                logger.warning(f"[PERSONA] Could not delete {item['sk']} (keeping it): {e}")
     return deleted, len(existing) - deleted
 
 

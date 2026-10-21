@@ -109,6 +109,24 @@ describe('ProjectDetail persona protection', () => {
     })
   })
 
+  it('leaves another persona\'s toggle usable while one persona\'s save is in flight', async () => {
+    const victor: ProjectPersona = { ...dana, persona_id: 'persona-2', name: 'Victor', tagline: 'Compares prices' }
+    mockGetProject.mockResolvedValue({ project, personas: [dana, victor], documents: [] })
+    const save = Promise.withResolvers<{ success: boolean }>()
+    mockUpdatePersona.mockReturnValueOnce(save.promise)
+    const user = userEvent.setup()
+    renderPage()
+    await openDana(user)
+
+    await user.click(screen.getByRole('button', { name: 'Protect from regeneration' }))
+    expect(screen.getByRole('button', { name: 'Protect from regeneration' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: /@Victor/ }))
+    expect(screen.getByRole('button', { name: 'Protect from regeneration' })).toBeEnabled()
+
+    save.resolve({ success: true })
+  })
+
   it('does not re-protect a released persona when it is edited afterwards', async () => {
     // The edit modal saves the whole persona. Seeded from the copy captured at
     // click time, it would carry `protected: true` back and undo the release.

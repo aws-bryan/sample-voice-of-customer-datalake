@@ -311,7 +311,8 @@ export default function ProjectDetail() {
           personaId: selectedPersona.persona_id,
           isProtected: selectedPersona.protected !== true,
         })}
-        isTogglingPersonaProtected={togglePersonaProtectedMut.isPending}
+        isTogglingPersonaProtected={togglePersonaProtectedMut.isPending
+          && togglePersonaProtectedMut.variables.personaId === selectedPersona?.persona_id}
         onImportPersona={() => importModal.setShowImportModal(true)}
         onSelectDoc={selection.setSelectedDoc}
         onEditDoc={() => selection.selectedDoc && docModal.openEditModal(selection.selectedDoc)}
