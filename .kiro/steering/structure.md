@@ -21,7 +21,7 @@ voice-of-customer-datalake/       # Root repository
     │   └── voc-datalake.ts           # CDK app entry point - defines all stacks
     ├── lib/stacks/                   # CDK stack definitions (TypeScript) - 5 stacks
     │   ├── api-stack.ts              # API Gateway, split API Lambdas (20KB policy limit), Webhooks, WAF
-    │   ├── bedrock-access-stack.ts   # Bedrock model access configuration
+    │   ├── bedrock-access-stack.ts   # Constructs: Anthropic use-case submission, Bedrock model agreements
     │   ├── core-stack.ts             # Core infrastructure (DynamoDB, S3, Cognito, CloudFront, KMS)
     │   ├── ingestion-stack.ts        # Plugin Lambdas, EventBridge schedules, SQS, Secrets
     │   └── processing-stack-consolidated.ts # Processing + Research (Bedrock, Step Functions)
@@ -399,6 +399,7 @@ VocCoreStack (DynamoDB tables, S3 raw data bucket, KMS, Cognito, CloudFront)
 AI-enablement stack, NO dependency on the core chain (but Processing/Api import
 its gateway exports, so it deploys first):
   VocWebSearchStack (always us-east-1) = web-search gateway (default-on, opt out
-    with -c enableWebSearch=false) + Bedrock model access / Anthropic use case
-    (only when anthropicUseCase is set). Not created when both halves are off.
+    with -c enableWebSearch=false) + Anthropic use-case form submission (only
+    when anthropicUseCase is set; unset by default). Not created when both halves
+    are off. Bedrock model agreements live in VocCoreStack (app region).
 ```
