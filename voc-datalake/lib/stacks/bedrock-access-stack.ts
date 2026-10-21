@@ -329,7 +329,7 @@ export class BedrockModelAgreements extends Construct {
 import boto3
 import json
 import logging
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -344,11 +344,16 @@ logger.setLevel(logging.INFO)
 # step that only pre-subscribes models. The account-state failures it absorbs
 # include an AWS Private Marketplace refusing the newest models (Workshop
 # Studio), a model not offered in this region, a missing Anthropic use case
-# form, and throttling that outlasted the SDK's retries.
+# form, throttling that outlasted the SDK's retries, and connection failures
+# (BotoCoreError, which carries no AWS error code).
 OWN_ROLE_ERROR_CODES = ('AccessDeniedException',)
+AWS_ERRORS = (ClientError, BotoCoreError)
 
 def _error_code(error):
-    return error.response.get('Error', {}).get('Code', '')
+    response = getattr(error, 'response', None)
+    if isinstance(response, dict):
+        return response.get('Error', {}).get('Code', '')
+    return type(error).__name__
 
 def _result(model_id, status, **extra):
     return {
@@ -401,7 +406,7 @@ def handler(event, context):
         # Get offer token
         logger.info(f"Fetching offer token for {model_id}")
         offers_response = bedrock.list_foundation_model_agreement_offers(modelId=model_id)
-    except ClientError as e:
+    except AWS_ERRORS as e:
         if _error_code(e) in OWN_ROLE_ERROR_CODES:
             logger.error(f"This stack's role cannot read agreement state for {model_id}: {str(e)}")
             raise
@@ -427,7 +432,7 @@ def handler(event, context):
     except bedrock.exceptions.ConflictException as e:
         logger.info(f"Agreement already exists for {model_id}: {str(e)}")
         return _result(model_id, 'ALREADY_EXISTS')
-    except ClientError as e:
+    except AWS_ERRORS as e:
         return _unavailable(model_id, e)
 
     logger.info(f"Successfully created agreement for {model_id}")

@@ -50,6 +50,10 @@ class _FakeClientError(Exception):
         self.response = {'Error': {'Code': code, 'Message': message}}
 
 
+class _FakeBotoCoreError(Exception):
+    """Stand-in for botocore BotoCoreError: a connection-level failure with no .response."""
+
+
 class _FakeConflict(_FakeClientError):
     """Stand-in for bedrock's ConflictException.
 
@@ -99,6 +103,7 @@ def _load_handler(*, create_raises: Exception | None = None,
     fake_botocore = types.ModuleType('botocore')
     fake_exceptions = types.ModuleType('botocore.exceptions')
     fake_exceptions.ClientError = _FakeClientError
+    fake_exceptions.BotoCoreError = _FakeBotoCoreError
     fake_botocore.exceptions = fake_exceptions
 
     saved = {k: sys.modules.get(k) for k in ('boto3', 'botocore', 'botocore.exceptions')}
@@ -190,6 +195,19 @@ def test_a_model_not_offered_in_this_region_is_reported_not_raised():
     assert calls['create'] == 0
     assert result['Data']['status'] == 'UNAVAILABLE'
     assert result['Data']['errorCode'] == 'ValidationException'
+
+
+@pytest.mark.parametrize('stage', ['availability', 'create'])
+def test_a_connection_failure_is_reported_instead_of_rolling_back_core(stage):
+    """A dropped connection has no AWS error code, but it is no more a reason to
+    roll back VocCoreStack than throttling is."""
+    failure = _FakeBotoCoreError('Could not connect to the endpoint URL')
+    handler, _ = _load_handler(**{f'{stage}_raises': failure})
+
+    result = handler(_event(), None)
+
+    assert result['Data']['status'] == 'UNAVAILABLE'
+    assert result['Data']['errorCode'] == '_FakeBotoCoreError'
 
 
 @pytest.mark.parametrize('offers', [[], [{}], [{'offerToken': ''}]])
