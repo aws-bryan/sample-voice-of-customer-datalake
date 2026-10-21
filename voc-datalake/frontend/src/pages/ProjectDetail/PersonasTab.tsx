@@ -3,7 +3,7 @@
  */
 import clsx from 'clsx'
 import {
-  Users, Sparkles, Upload,
+  Users, Sparkles, Upload, Lock,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import PersonaAvatar from './PersonaAvatar'
@@ -19,10 +19,12 @@ interface PersonasTabProps {
   readonly onEditPersona: () => void
   readonly onDeletePersona: () => void
   readonly onSaveNotes: (notes: NoteItem[]) => void
+  readonly onToggleProtected: () => void
   readonly onGeneratePersonas: () => void
   readonly onImportPersona: () => void
   readonly isDeleting: boolean
   readonly isSavingNotes: boolean
+  readonly isTogglingProtected: boolean
 }
 
 export default function PersonasTab({
@@ -33,10 +35,12 @@ export default function PersonasTab({
   onEditPersona,
   onDeletePersona,
   onSaveNotes,
+  onToggleProtected,
   onGeneratePersonas,
   onImportPersona,
   isDeleting,
   isSavingNotes,
+  isTogglingProtected,
 }: PersonasTabProps) {
   const { t } = useTranslation('projectDetail')
 
@@ -80,6 +84,16 @@ export default function PersonasTab({
                     <h4 className="font-medium truncate text-sm lg:text-base">@{p.name}</h4>
                     <p className="text-xs text-gray-500 truncate">{p.tagline}</p>
                   </div>
+                  {p.protected === true ? (
+                    <span
+                      className="flex-shrink-0 text-amber-600"
+                      role="img"
+                      aria-label={t('personas.protected')}
+                      title={t('personas.protectedHint')}
+                    >
+                      <Lock size={14} aria-hidden="true" />
+                    </span>
+                  ) : null}
                 </div>
               </button>
             ))}
@@ -94,8 +108,10 @@ export default function PersonasTab({
                 onEdit={onEditPersona}
                 onDelete={onDeletePersona}
                 onSaveNotes={onSaveNotes}
+                onToggleProtected={onToggleProtected}
                 isDeleting={isDeleting}
                 isSavingNotes={isSavingNotes}
+                isTogglingProtected={isTogglingProtected}
               />
             ) : (
               <div className="flex items-center justify-center h-full min-h-[500px] text-gray-400">

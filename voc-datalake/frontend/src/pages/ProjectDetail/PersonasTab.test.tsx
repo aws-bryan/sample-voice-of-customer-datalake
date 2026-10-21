@@ -19,10 +19,12 @@ const defaultProps = {
   onEditPersona: vi.fn(),
   onDeletePersona: vi.fn(),
   onSaveNotes: vi.fn(),
+  onToggleProtected: vi.fn(),
   onGeneratePersonas: vi.fn(),
   onImportPersona: vi.fn(),
   isDeleting: false,
   isSavingNotes: false,
+  isTogglingProtected: false,
 }
 
 describe('PersonasTab', () => {
@@ -87,6 +89,15 @@ describe('PersonasTab', () => {
     const buttons = screen.getAllByRole('button')
     const personaButton = buttons.find(b => b.textContent?.includes('@TestUser'))
     expect(personaButton).toHaveClass('bg-purple-50', 'border-purple-300')
+  })
+
+  it('marks only protected personas with a lock in the list', () => {
+    const protectedPersona: ProjectPersona = { ...mockPersona, persona_id: '2', name: 'KeptUser', protected: true }
+    render(<PersonasTab {...defaultProps} personas={[mockPersona, protectedPersona]} />)
+
+    const locks = screen.getAllByRole('img', { name: 'Protected' })
+    expect(locks).toHaveLength(1)
+    expect(screen.getByRole('button', { name: /@KeptUser/ })).toContainElement(locks[0])
   })
 
   it('calls onGeneratePersonas from empty state button', async () => {

@@ -251,7 +251,9 @@ AVATAR_MAX_CONCURRENCY = MAX_PERSONAS_PER_GENERATION
 # Must equal persona-generation.json's "version"; a lockstep test pins the pair, since this
 # is a literal in the house style of processor/handler.py's PROMPT_VERSION rather than a
 # value read back out of the file.
-PERSONA_PROMPT_VERSION = '2.1.0'
+# 2.1.0 -> 2.2.0: both steps gained {existing_section}, which names the protected personas
+# a regeneration keeps so the new ones cover other segments.
+PERSONA_PROMPT_VERSION = '2.2.0'
 
 
 def generate_persona_avatar(persona_data: dict, s3_bucket: str | None = None) -> dict:
@@ -385,6 +387,63 @@ def preview_persona_feedback(filters: dict, mode: str = 'exact') -> dict:
 
 projects_table = get_projects_table()
 feedback_table = get_feedback_table()
+
+
+# A protected persona is kept when personas are regenerated (see generate_personas).
+# Absent means unprotected, so every persona written before this existed keeps the
+# old replace-on-regenerate behaviour.
+PERSONA_PROTECTED_FIELD = 'protected'
+
+
+def _is_protected(persona: dict) -> bool:
+    return persona.get(PERSONA_PROTECTED_FIELD) is True
+
+
+def _query_project_personas(project_id: str) -> list[dict]:
+    """Every persona row's key, name, tagline and protection, all pages."""
+    query = {
+        'KeyConditionExpression': Key('pk').eq(f'PROJECT#{project_id}') & Key('sk').begins_with('PERSONA#'),
+        'ProjectionExpression': 'pk, sk, #name, tagline, #protected',
+        'ExpressionAttributeNames': {'#name': 'name', '#protected': PERSONA_PROTECTED_FIELD},
+    }
+    items: list[dict] = []
+    while True:
+        response = projects_table.query(**query)
+        if not isinstance(response, dict):
+            return items
+        page = response.get('Items')
+        if isinstance(page, list):
+            items.extend(item for item in page if isinstance(item, dict))
+        cursor = response.get('LastEvaluatedKey')
+        if not isinstance(cursor, dict) or not cursor:
+            return items
+        query['ExclusiveStartKey'] = cursor
+
+
+def _delete_unprotected_personas(project_id: str) -> tuple[int, int]:
+    """Delete the project's unprotected personas. Returns ``(deleted, kept)``.
+
+    Protection is re-read here rather than taken from the start of the run, and
+    each delete is conditional on the row still being unprotected: generation
+    takes minutes, and a persona protected meanwhile must survive it.
+    """
+    existing = _query_project_personas(project_id)
+    deleted = 0
+    for item in existing:
+        if _is_protected(item):
+            continue
+        try:
+            projects_table.delete_item(
+                Key={'pk': item['pk'], 'sk': item['sk']},
+                ConditionExpression='attribute_not_exists(#protected) OR #protected <> :true',
+                ExpressionAttributeNames={'#protected': PERSONA_PROTECTED_FIELD},
+                ExpressionAttributeValues={':true': True},
+            )
+            deleted += 1
+        except ClientError as e:
+            if e.response.get('Error', {}).get('Code') != 'ConditionalCheckFailedException':
+                raise
+    return deleted, len(existing) - deleted
 
 
 def fix_persona_name(name: str) -> str:
@@ -1127,6 +1186,15 @@ def generate_personas(project_id: str, filters: dict, progress_callback: callabl
         logger.info("[PERSONA] Step 3/6: Building LLM chain steps from prompts...")
         update_progress(15, 'building_prompts')
 
+        # Protected personas survive this run, so the model is told about them
+        # and asked for other segments. Best-effort: a failed read only loses
+        # that hint — the deletion below re-reads protection for itself.
+        try:
+            kept_personas = [p for p in _query_project_personas(project_id) if _is_protected(p)]
+        except Exception as e:
+            logger.warning(f"[PERSONA] Could not read protected personas (continuing): {e}")
+            kept_personas = []
+
         # Build chain steps from external prompt files
         try:
             chain_steps = get_persona_generation_steps(
@@ -1136,6 +1204,7 @@ def generate_personas(project_id: str, filters: dict, progress_callback: callabl
                 custom_instructions=custom_instructions,
                 response_language=filters.get('response_language'),
                 sample_chars=context_budget,
+                existing_personas=kept_personas,
             )
             logger.info(f"[PERSONA] Built {len(chain_steps)} chain steps")
         except Exception as e:
@@ -1225,23 +1294,18 @@ def generate_personas(project_id: str, filters: dict, progress_callback: callabl
         logger.info("[PERSONA] Step 6/6: Saving personas to database...")
         update_progress(80, 'saving_personas')
 
-        # Replace semantics: delete any existing personas for this project first,
-        # so re-running generation doesn't accumulate duplicates (e.g. "김지수" x2).
-        # Without this, each generation appended a fresh set and @all roundtable
-        # chat would have the same persona answer multiple times.
-        existing_count = 0
+        # Replace semantics for UNPROTECTED personas: delete them first, so
+        # re-running generation doesn't accumulate duplicates (e.g. "김지수" x2) —
+        # each run used to append a fresh set and @all roundtable chat had the same
+        # persona answer multiple times. Protected personas are kept, which is what
+        # makes generation additive for the ones the user chose to keep.
+        kept_count = 0
         try:
-            existing = projects_table.query(
-                KeyConditionExpression=Key('pk').eq(f'PROJECT#{project_id}')
-                & Key('sk').begins_with('PERSONA#'),
-                ProjectionExpression='pk, sk',
-            ).get('Items', [])
-            if existing:
-                with projects_table.batch_writer() as batch:
-                    for it in existing:
-                        batch.delete_item(Key={'pk': it['pk'], 'sk': it['sk']})
-                existing_count = len(existing)
-                logger.info(f"[PERSONA] Cleared {existing_count} existing persona(s) before regeneration")
+            deleted_count, kept_count = _delete_unprotected_personas(project_id)
+            logger.info(
+                f"[PERSONA] Cleared {deleted_count} persona(s) before regeneration; "
+                f"kept {kept_count} protected"
+            )
         except Exception as e:
             logger.warning(f"[PERSONA] Failed to clear existing personas (continuing): {e}")
 
@@ -1421,8 +1485,9 @@ def generate_personas(project_id: str, filters: dict, progress_callback: callabl
             saved_personas.append(item)
             logger.info(f"[PERSONA] Saved persona: {persona.get('name')}")
 
-        # Set persona count to the new total (we cleared the old set above, so
-        # this is a replace, not an increment — keeps the count accurate).
+        # Set persona count to the new total: the protected personas kept above
+        # plus the ones just saved (a replace, not an increment, so it stays
+        # accurate however many unprotected ones were cleared).
         projects_table.update_item(
             Key=project_meta_key(project_id),
             UpdateExpression='SET persona_count = :count, updated_at = :now',
@@ -1432,7 +1497,7 @@ def generate_personas(project_id: str, filters: dict, progress_callback: callabl
             ),
             ExpressionAttributeValues={
                 **PROJECT_WRITABLE_ATTRIBUTE_VALUES,
-                ':count': len(saved_personas),
+                ':count': kept_count + len(saved_personas),
                 ':now': now,
             },
         )
@@ -2299,9 +2364,15 @@ def update_persona(project_id: str, persona_id: str, body: dict) -> dict:
         'name', 'tagline', 'confidence',
         'identity', 'goals_motivations', 'pain_points', 'behaviors',
         'context_environment', 'quotes', 'scenario', 'research_notes',
-        'avatar_url', 'avatar_prompt',
+        'avatar_url', 'avatar_prompt', PERSONA_PROTECTED_FIELD,
     ]
     
+    # Validated, not coerced: `"false"` read as truthy would protect a persona
+    # the caller meant to release, and it would then silently survive every
+    # regeneration. Same contract as the generate route's `generate_avatars`.
+    if PERSONA_PROTECTED_FIELD in body and not isinstance(body[PERSONA_PROTECTED_FIELD], bool):
+        raise ValidationError(f'{PERSONA_PROTECTED_FIELD} must be true or false')
+
     for field in updatable_fields:
         if field in body:
             attr_name = f'#{field}'

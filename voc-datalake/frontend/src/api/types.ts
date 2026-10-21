@@ -428,6 +428,8 @@ export interface ProjectPersona {
   /** Every review the persona's generation batch read. */
   input_feedback_ids?: string[]
   feedback_provenance?: PersonaFeedbackProvenance
+  /** Survives persona regeneration instead of being replaced. Absent means unprotected. */
+  protected?: boolean
 }
 
 /** How the feedback a persona was generated from was drawn from the matching set. */

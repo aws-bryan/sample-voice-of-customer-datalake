@@ -382,6 +382,9 @@
     "notesCount_other": "{{count}}件のメモ",
     "notesTip": "💡 ヒント: ユーザーインタビュー、ユーザビリティテスト、またはデータ分析からこのペルソナに関連する観察を追加してください。",
     "pressEnter": "Enterキーを押す ↵",
+    "protect": "再生成から保護",
+    "protected": "保護中",
+    "protectedHint": "ペルソナを再生成しても保持されます",
     "removeNote": "ノートを削除",
     "researchNotes": "リサーチノート",
     "reviews": "{{count}}件のレビュー",
@@ -406,7 +409,8 @@
       "tabUsed": "使用したすべてのレビュー",
       "tabsLabel": "表示するフィードバック",
       "title": "@{{name}} の元のフィードバック"
-    }
+    },
+    "unprotect": "保護を解除"
   },
   "personaSections": {
     "behaviorsHabits": "行動と習慣",
@@ -536,6 +540,12 @@
     "newDocTitlePlaceholder": "例：Virtual Concierge PRD",
     "outputDocType": "出力ドキュメントタイプ",
     "personaCount": "ペルソナ数: {{count}}",
+    "personasKept_one": "保護中のペルソナ {{count}} 件は保持されます。",
+    "personasKept_other": "保護中のペルソナ {{count}} 件は保持されます。",
+    "personasReplacedAll_one": "既存のペルソナが置き換えられます。残したい場合は先に保護してください。",
+    "personasReplacedAll_other": "既存のペルソナ {{count}} 件がすべて置き換えられます。残したいものは先に保護してください。",
+    "personasReplaced_one": "保護されていないペルソナ {{count}} 件は置き換えられます。",
+    "personasReplaced_other": "保護されていないペルソナ {{count}} 件は置き換えられます。",
     "prd": "PRD",
     "prdDesc": "製品要件ドキュメント",
     "prdLabel": "PRD",

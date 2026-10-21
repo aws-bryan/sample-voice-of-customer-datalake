@@ -176,6 +176,17 @@ describe('normalizeProjectDetail', () => {
     expect(legacy.input_feedback_ids).toBeUndefined()
   })
 
+  it('reads only a real boolean as the protected flag', () => {
+    const result = normalizeProjectDetail(envelope([
+      { persona_id: 'kept', protected: true },
+      { persona_id: 'released', protected: false },
+      { persona_id: 'string', protected: 'true' },
+      { persona_id: 'legacy' },
+    ], []))
+
+    expect(result.personas.map((p) => p.protected)).toStrictEqual([true, false, undefined, undefined])
+  })
+
   it('preserves an unknown future document type instead of dropping the row', () => {
     const result = normalizeProjectDetail(envelope([], [{
       document_id: 'future-1',

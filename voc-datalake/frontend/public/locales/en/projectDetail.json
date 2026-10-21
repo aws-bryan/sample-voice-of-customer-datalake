@@ -382,6 +382,9 @@
     "notesCount_other": "{{count}} notes",
     "notesTip": "💡 Tip: Add observations from user interviews, usability tests, or data analysis that relate to this persona.",
     "pressEnter": "Press Enter ↵",
+    "protect": "Protect from regeneration",
+    "protected": "Protected",
+    "protectedHint": "Kept when personas are regenerated",
     "removeNote": "Remove note",
     "researchNotes": "Research Notes",
     "reviews": "{{count}} reviews",
@@ -406,7 +409,8 @@
       "tabUsed": "All reviews used",
       "tabsLabel": "Which feedback to show",
       "title": "Source feedback for @{{name}}"
-    }
+    },
+    "unprotect": "Stop protecting"
   },
   "personaSections": {
     "behaviorsHabits": "Behaviors & Habits",
@@ -536,6 +540,12 @@
     "newDocTitlePlaceholder": "e.g., Virtual Concierge PRD",
     "outputDocType": "Output Document Type",
     "personaCount": "Number of Personas: {{count}}",
+    "personasKept_one": "{{count}} protected persona will be kept.",
+    "personasKept_other": "{{count}} protected personas will be kept.",
+    "personasReplacedAll_one": "This replaces the existing persona. Protect it first if you want to keep it.",
+    "personasReplacedAll_other": "This replaces all {{count}} existing personas. Protect any you want to keep first.",
+    "personasReplaced_one": "{{count}} unprotected persona will be replaced.",
+    "personasReplaced_other": "{{count}} unprotected personas will be replaced.",
     "prd": "PRD",
     "prdDesc": "Product Requirements Document",
     "prdLabel": "PRD",

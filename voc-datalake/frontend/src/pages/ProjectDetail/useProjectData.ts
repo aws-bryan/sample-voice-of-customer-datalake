@@ -385,6 +385,18 @@ export function usePersonaMutations({
     },
   })
 
+  // Separate from updatePersonaMut so a toggle doesn't light the notes/edit
+  // "saving" state. onSuccess returns the refetch, so the mutation stays pending
+  // until the new flag is on screen and the button never shows the old state.
+  const togglePersonaProtectedMut = useMutation({
+    mutationFn: (data: {
+      personaId: string;
+      isProtected: boolean
+    }) =>
+      projectsApi.updatePersona(projectId, data.personaId, { protected: data.isProtected }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: projectKey(id) }),
+  })
+
   const deletePersonaMut = useMutation({
     mutationFn: (personaId: string) => projectsApi.deletePersona(projectId, personaId),
     onSuccess: () => {
@@ -416,6 +428,7 @@ export function usePersonaMutations({
 
   return {
     updatePersonaMut,
+    togglePersonaProtectedMut,
     deletePersonaMut,
     importPersonaMut,
     saveNotes,

@@ -386,6 +386,9 @@
     "notesCount_other": "{{count}} remarques",
     "notesTip": "💡 Conseil : Ajoutez des observations provenant d'entretiens utilisateurs, tests d'utilisabilité ou analyses de données qui se rapportent à ce persona.",
     "pressEnter": "Appuyez sur Entrée ↵",
+    "protect": "Protéger de la régénération",
+    "protected": "Protégé",
+    "protectedHint": "Conservé lors de la régénération des personas",
     "removeNote": "Supprimer la note",
     "researchNotes": "Notes de recherche",
     "reviews": "{{count}} avis",
@@ -410,7 +413,8 @@
       "tabUsed": "Tous les avis utilisés",
       "tabsLabel": "Avis affichés",
       "title": "Avis sources de @{{name}}"
-    }
+    },
+    "unprotect": "Retirer la protection"
   },
   "personaSections": {
     "behaviorsHabits": "Comportements et habitudes",
@@ -541,6 +545,12 @@
     "newDocTitlePlaceholder": "ex. : Concierge virtuel PRD",
     "outputDocType": "Type de document de sortie",
     "personaCount": "Nombre de personas : {{count}}",
+    "personasKept_one": "{{count}} persona protégé sera conservé.",
+    "personasKept_other": "{{count}} personas protégés seront conservés.",
+    "personasReplacedAll_one": "Cette action remplace le persona existant. Protégez-le d’abord si vous voulez le conserver.",
+    "personasReplacedAll_other": "Cette action remplace les {{count}} personas existants. Protégez d’abord ceux que vous voulez conserver.",
+    "personasReplaced_one": "{{count}} persona non protégé sera remplacé.",
+    "personasReplaced_other": "{{count}} personas non protégés seront remplacés.",
     "prd": "PRD",
     "prdDesc": "Document de spécifications produit",
     "prdLabel": "PRD",

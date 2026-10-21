@@ -27,7 +27,10 @@ const basePersona: ProjectPersona = {
   feedback_count: 14,
 }
 
-function renderView(persona: ProjectPersona) {
+function renderView(
+  persona: ProjectPersona,
+  { onToggleProtected = vi.fn(), isTogglingProtected = false } = {},
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
@@ -38,8 +41,10 @@ function renderView(persona: ProjectPersona) {
           onEdit={vi.fn()}
           onDelete={vi.fn()}
           onSaveNotes={vi.fn()}
+          onToggleProtected={onToggleProtected}
           isDeleting={false}
           isSavingNotes={false}
+          isTogglingProtected={isTogglingProtected}
         />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -83,5 +88,31 @@ describe('PersonaDetailView', () => {
     expect(screen.getByRole('dialog', { name: 'Source feedback for @Dana' })).toBeInTheDocument()
     expect(mockGetPersonaSourceFeedback).toHaveBeenCalledWith('proj-1', 'persona-1', { scope: 'cited', offset: 0, limit: 25 })
     expect(await screen.findByText(/generated before source tracking was added/)).toBeInTheDocument()
+  })
+
+  it('offers to protect an unprotected persona and shows no protected badge', async () => {
+    const user = userEvent.setup()
+    const onToggleProtected = vi.fn()
+    renderView(basePersona, { onToggleProtected })
+
+    const toggle = screen.getByRole('button', { name: 'Protect from regeneration' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.queryByText('Protected')).not.toBeInTheDocument()
+
+    await user.click(toggle)
+    expect(onToggleProtected).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks a protected persona and offers to release it', () => {
+    renderView({ ...basePersona, protected: true })
+
+    expect(screen.getByRole('button', { name: 'Stop protecting' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Protected')).toHaveAttribute('title', 'Kept when personas are regenerated')
+  })
+
+  it('disables the protect toggle while the change is saving', () => {
+    renderView(basePersona, { isTogglingProtected: true })
+
+    expect(screen.getByRole('button', { name: 'Protect from regeneration' })).toBeDisabled()
   })
 })

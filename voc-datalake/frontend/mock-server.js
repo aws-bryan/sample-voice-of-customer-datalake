@@ -885,6 +885,25 @@ function clampedInt(raw, fallback, min, max) {
   return Number.isFinite(n) ? Math.min(Math.max(n, min), max) : fallback;
 }
 
+// Mirrors update_persona's updatable_fields in lambda/api/projects.py.
+const PERSONA_UPDATABLE_FIELDS = [
+  'name', 'tagline', 'confidence', 'identity', 'goals_motivations', 'pain_points', 'behaviors',
+  'context_environment', 'quotes', 'scenario', 'research_notes', 'avatar_url', 'avatar_prompt', 'protected',
+];
+/** { status, body } for PUT .../personas/{id}: edit, research notes, or the protect toggle.
+ *  Same 400 as the API on a non-boolean `protected`. */
+function updateMockPersona(projectId, personaId, body) {
+  const persona = mockProjectDetails[projectId]?.personas.find(p => p.persona_id === personaId);
+  if (!persona) return { status: 404, body: { success: false, error: 'Persona not found' } };
+  if (Object.hasOwn(body, 'protected') && typeof body.protected !== 'boolean') {
+    return { status: 400, body: { success: false, error: 'protected must be true or false' } };
+  }
+  for (const field of PERSONA_UPDATABLE_FIELDS) {
+    if (Object.hasOwn(body, field)) persona[field] = body[field];
+  }
+  persona.updated_at = new Date().toISOString();
+  return { status: 200, body: { success: true } };
+}
 /** { status, body } for one page of a persona's source feedback. */
 function personaSourceFeedback(projectId, personaId, searchParams) {
   const persona = mockProjectDetails[projectId]?.personas.find(p => p.persona_id === personaId);
@@ -1343,6 +1362,15 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  const personaUpdateMatch = url.pathname.match(/^\/projects\/([^/]+)\/personas\/([^/]+)$/);
+  if (req.method === 'PUT' && personaUpdateMatch) {
+    collectJson(req, res, (body) => {
+      const result = updateMockPersona(personaUpdateMatch[1], personaUpdateMatch[2], body ?? {});
+      res.writeHead(result.status);
+      res.end(JSON.stringify(result.body));
+    });
+    return;
+  }
   // The persona wizard's live "N reviews match" count.
   if (req.method === 'POST' && /^\/projects\/[^/]+\/personas\/preview-feedback$/.test(url.pathname)) {
     collectJson(req, res, (body) => {

@@ -382,6 +382,9 @@
     "notesCount_other": "메모 {{count}}개",
     "notesTip": "💡 팁: 사용자 인터뷰, 사용성 테스트 또는 데이터 분석에서 이 페르소나와 관련된 관찰을 추가하세요.",
     "pressEnter": "Enter 키 입력 ↵",
+    "protect": "재생성에서 보호",
+    "protected": "보호됨",
+    "protectedHint": "페르소나를 다시 생성해도 유지됩니다",
     "removeNote": "노트 삭제",
     "researchNotes": "연구 노트",
     "reviews": "{{count}}개 리뷰",
@@ -406,7 +409,8 @@
       "tabUsed": "사용된 모든 리뷰",
       "tabsLabel": "표시할 피드백",
       "title": "@{{name}}의 원본 피드백"
-    }
+    },
+    "unprotect": "보호 해제"
   },
   "personaSections": {
     "behaviorsHabits": "행동 및 습관",
@@ -536,6 +540,12 @@
     "newDocTitlePlaceholder": "예: Virtual Concierge PRD",
     "outputDocType": "출력 문서 유형",
     "personaCount": "페르소나 수: {{count}}",
+    "personasKept_one": "보호된 페르소나 {{count}}개는 유지됩니다.",
+    "personasKept_other": "보호된 페르소나 {{count}}개는 유지됩니다.",
+    "personasReplacedAll_one": "기존 페르소나가 대체됩니다. 유지하려면 먼저 보호하세요.",
+    "personasReplacedAll_other": "기존 페르소나 {{count}}개가 모두 대체됩니다. 유지할 페르소나는 먼저 보호하세요.",
+    "personasReplaced_one": "보호되지 않은 페르소나 {{count}}개는 대체됩니다.",
+    "personasReplaced_other": "보호되지 않은 페르소나 {{count}}개는 대체됩니다.",
     "prd": "PRD",
     "prdDesc": "제품 요구사항 문서",
     "prdLabel": "PRD",

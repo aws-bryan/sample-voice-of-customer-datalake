@@ -386,6 +386,9 @@
     "notesCount_other": "{{count}} notas",
     "notesTip": "💡 Dica: Adicione observações de entrevistas com usuários, testes de usabilidade ou análise de dados relacionadas a esta persona.",
     "pressEnter": "Pressione Enter ↵",
+    "protect": "Proteger da regeneração",
+    "protected": "Protegida",
+    "protectedHint": "Mantida ao regenerar as personas",
     "removeNote": "Remover nota",
     "researchNotes": "Notas de Pesquisa",
     "reviews": "{{count}} avaliações",
@@ -410,7 +413,8 @@
       "tabUsed": "Todas as avaliações usadas",
       "tabsLabel": "Feedback exibido",
       "title": "Feedback de origem de @{{name}}"
-    }
+    },
+    "unprotect": "Remover proteção"
   },
   "personaSections": {
     "behaviorsHabits": "Comportamentos & Hábitos",
@@ -541,6 +545,12 @@
     "newDocTitlePlaceholder": "ex: Virtual Concierge PRD",
     "outputDocType": "Tipo de Documento de Saída",
     "personaCount": "Número de Personas: {{count}}",
+    "personasKept_one": "{{count}} persona protegida será mantida.",
+    "personasKept_other": "{{count}} personas protegidas serão mantidas.",
+    "personasReplacedAll_one": "Isso substitui a persona existente. Proteja-a antes se quiser mantê-la.",
+    "personasReplacedAll_other": "Isso substitui todas as {{count}} personas existentes. Proteja antes as que quiser manter.",
+    "personasReplaced_one": "{{count}} persona não protegida será substituída.",
+    "personasReplaced_other": "{{count}} personas não protegidas serão substituídas.",
     "prd": "PRD",
     "prdDesc": "Documento de Requisitos do Produto",
     "prdLabel": "PRD",

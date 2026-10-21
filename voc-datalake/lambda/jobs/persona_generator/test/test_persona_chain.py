@@ -229,8 +229,7 @@ class TestReplaceSemantics:
 
         result = generate_personas('proj-1', {'persona_count': 2})
 
-        batch = projects_table.batch_writer.return_value.__enter__.return_value
-        deleted = {c.kwargs['Key']['sk'] for c in batch.delete_item.call_args_list}
+        deleted = {c.kwargs['Key']['sk'] for c in projects_table.delete_item.call_args_list}
         assert deleted == {'PERSONA#old-1', 'PERSONA#old-2', 'PERSONA#old-3'}
 
         # Replace, not increment: two personas saved, so the META count is 2
@@ -238,6 +237,77 @@ class TestReplaceSemantics:
         values = projects_table.update_item.call_args.kwargs['ExpressionAttributeValues']
         assert values[':count'] == 2
         assert len(result['personas']) == 2
+
+    def test_protected_personas_are_kept_and_counted(
+        self, projects_table, feedback, chain, avatars
+    ):
+        from api.projects import generate_personas
+
+        projects_table.query.return_value = {'Items': [
+            {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#keep', 'name': 'Darlene', 'protected': True},
+            {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#old', 'name': 'Mike'},
+        ]}
+
+        generate_personas('proj-1', {'persona_count': 2})
+
+        deleted = {c.kwargs['Key']['sk'] for c in projects_table.delete_item.call_args_list}
+        assert deleted == {'PERSONA#old'}
+        # Kept + new: one protected persona survives beside the two just made.
+        values = projects_table.update_item.call_args.kwargs['ExpressionAttributeValues']
+        assert values[':count'] == 3
+
+    def test_each_delete_is_conditional_on_the_persona_still_being_unprotected(
+        self, projects_table, feedback, chain, avatars
+    ):
+        """Generation takes minutes; a persona protected meanwhile must survive."""
+        from api.projects import generate_personas
+
+        projects_table.query.return_value = {'Items': [{'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#old'}]}
+
+        generate_personas('proj-1', {'persona_count': 2})
+
+        call = projects_table.delete_item.call_args
+        assert 'attribute_not_exists(#protected)' in call.kwargs['ConditionExpression']
+        assert call.kwargs['ExpressionAttributeNames'] == {'#protected': 'protected'}
+
+    def test_a_persona_protected_mid_run_is_not_deleted_or_fatal(
+        self, projects_table, feedback, chain, avatars
+    ):
+        from botocore.exceptions import ClientError
+        from api.projects import generate_personas
+
+        projects_table.query.return_value = {'Items': [
+            {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#raced'},
+            {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#old'},
+        ]}
+        conditional = ClientError({'Error': {'Code': 'ConditionalCheckFailedException'}}, 'DeleteItem')
+        projects_table.delete_item.side_effect = [conditional, {}]
+
+        result = generate_personas('proj-1', {'persona_count': 2})
+
+        assert len(result['personas']) == 2
+        # 'raced' failed its condition, so it was kept and is counted.
+        values = projects_table.update_item.call_args.kwargs['ExpressionAttributeValues']
+        assert values[':count'] == 3
+
+    def test_protected_personas_are_named_to_the_model_so_it_does_not_recreate_them(
+        self, projects_table, feedback, chain, avatars
+    ):
+        from api.projects import generate_personas
+
+        projects_table.query.return_value = {'Items': [
+            {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#keep', 'name': 'Darlene Whitaker',
+             'tagline': 'The loyal regular', 'protected': True},
+            {'pk': 'PROJECT#proj-1', 'sk': 'PERSONA#old', 'name': 'Mike Kowalski'},
+        ]}
+
+        generate_personas('proj-1', {'persona_count': 2})
+
+        steps = chain.call_args.args[0]
+        for step in steps:
+            assert 'Darlene Whitaker — The loyal regular' in step['user']
+            # Only the kept persona: an unprotected one is about to be replaced.
+            assert 'Mike Kowalski' not in step['user']
 
     def test_saved_persona_keeps_the_full_documented_shape(
         self, projects_table, feedback, chain, avatars

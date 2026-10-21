@@ -12,6 +12,7 @@ import DataSourceWizard from '../../components/DataSourceWizard'
 import ContextSummary from '../../components/DataSourceWizard/ContextSummary'
 import { isWebSearchAvailable } from '../../runtimeConfig'
 import PersonaFeedbackPreview from './PersonaFeedbackPreview'
+import PersonaRegenerationNote from './PersonaRegenerationNote'
 import type {
   PersonaToolConfig, ResearchToolConfig, DocToolConfig, MergeToolConfig, DocType,
 } from './types'
@@ -79,6 +80,7 @@ export function PersonaWizard({
             })} placeholder="e.g., Focus on business travelers..." rows={4} className="w-full px-3 py-2 border rounded-lg" />
           </div>
           <ContextSummary config={contextConfig} personas={personas} documents={documents} />
+          <PersonaRegenerationNote personas={personas} />
         </div>
       )}
       finalStepValid

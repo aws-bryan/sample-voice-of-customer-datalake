@@ -125,6 +125,9 @@ const ProjectPersonaSchema = z.looseObject({
   evidence_feedback_ids: optionalStringArray,
   input_feedback_ids: optionalStringArray,
   feedback_provenance: optionalProvenanceSchema,
+  // Strictly boolean, like the API's own check: a stray "false" read as truthy
+  // would show a persona as kept when regeneration is about to replace it.
+  protected: z.boolean().optional().catch(undefined),
 })
 
 function withLegacyManagedDocumentType(raw: unknown): unknown {

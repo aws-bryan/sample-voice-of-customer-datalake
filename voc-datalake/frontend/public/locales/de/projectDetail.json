@@ -382,6 +382,9 @@
     "notesCount_other": "{{count}} Notizen",
     "notesTip": "💡 Tipp: Fügen Sie Beobachtungen aus Nutzerinterviews, Usability-Tests oder Datenanalysen hinzu, die sich auf diese Persona beziehen.",
     "pressEnter": "Enter drücken ↵",
+    "protect": "Vor Neugenerierung schützen",
+    "protected": "Geschützt",
+    "protectedHint": "Bleibt beim Neugenerieren der Personas erhalten",
     "removeNote": "Notiz entfernen",
     "researchNotes": "Forschungsnotizen",
     "reviews": "{{count}} Bewertungen",
@@ -406,7 +409,8 @@
       "tabUsed": "Alle verwendeten Bewertungen",
       "tabsLabel": "Angezeigtes Feedback",
       "title": "Quell-Feedback für @{{name}}"
-    }
+    },
+    "unprotect": "Schutz aufheben"
   },
   "personaSections": {
     "behaviorsHabits": "Verhaltensweisen & Gewohnheiten",
@@ -536,6 +540,12 @@
     "newDocTitlePlaceholder": "z.B. Virtueller Concierge PRD",
     "outputDocType": "Ausgabe-Dokumenttyp",
     "personaCount": "Anzahl der Personas: {{count}}",
+    "personasKept_one": "{{count}} geschützte Persona bleibt erhalten.",
+    "personasKept_other": "{{count}} geschützte Personas bleiben erhalten.",
+    "personasReplacedAll_one": "Dies ersetzt die vorhandene Persona. Schützen Sie sie vorher, wenn Sie sie behalten möchten.",
+    "personasReplacedAll_other": "Dies ersetzt alle {{count}} vorhandenen Personas. Schützen Sie vorher alle, die Sie behalten möchten.",
+    "personasReplaced_one": "{{count}} ungeschützte Persona wird ersetzt.",
+    "personasReplaced_other": "{{count}} ungeschützte Personas werden ersetzt.",
     "prd": "PRD",
     "prdDesc": "Produktanforderungsdokument",
     "prdLabel": "PRD",

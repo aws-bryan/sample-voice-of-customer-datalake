@@ -382,6 +382,9 @@
     "notesCount_other": "{{count}}条笔记",
     "notesTip": "💡 提示：添加来自用户访谈、可用性测试或数据分析中与该用户角色相关的观察。",
     "pressEnter": "按 Enter ↵",
+    "protect": "重新生成时保留",
+    "protected": "已保护",
+    "protectedHint": "重新生成用户角色时会保留",
     "removeNote": "删除备注",
     "researchNotes": "研究笔记",
     "reviews": "{{count}} 条评价",
@@ -406,7 +409,8 @@
       "tabUsed": "使用的全部评论",
       "tabsLabel": "显示的反馈",
       "title": "@{{name}} 的来源反馈"
-    }
+    },
+    "unprotect": "取消保护"
   },
   "personaSections": {
     "behaviorsHabits": "行为与习惯",
@@ -536,6 +540,12 @@
     "newDocTitlePlaceholder": "例如：虚拟礼宾 PRD",
     "outputDocType": "输出文档类型",
     "personaCount": "用户角色数量：{{count}}",
+    "personasKept_one": "将保留 {{count}} 个受保护的用户角色。",
+    "personasKept_other": "将保留 {{count}} 个受保护的用户角色。",
+    "personasReplacedAll_one": "这会替换现有的用户角色。如需保留，请先将其保护。",
+    "personasReplacedAll_other": "这会替换全部 {{count}} 个现有用户角色。请先保护需要保留的角色。",
+    "personasReplaced_one": "{{count}} 个未受保护的用户角色将被替换。",
+    "personasReplaced_other": "{{count}} 个未受保护的用户角色将被替换。",
     "prd": "PRD",
     "prdDesc": "产品需求文档",
     "prdLabel": "PRD",

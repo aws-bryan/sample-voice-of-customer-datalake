@@ -386,6 +386,9 @@
     "notesCount_other": "{{count}} notas",
     "notesTip": "💡 Consejo: Agrega observaciones de entrevistas con usuarios, pruebas de usabilidad o análisis de datos relacionados con esta persona.",
     "pressEnter": "Presiona Enter ↵",
+    "protect": "Proteger de la regeneración",
+    "protected": "Protegida",
+    "protectedHint": "Se conserva al regenerar las personas",
     "removeNote": "Eliminar nota",
     "researchNotes": "Notas de Investigación",
     "reviews": "{{count}} reseñas",
@@ -410,7 +413,8 @@
       "tabUsed": "Todas las reseñas usadas",
       "tabsLabel": "Comentarios que se muestran",
       "title": "Comentarios de origen de @{{name}}"
-    }
+    },
+    "unprotect": "Quitar protección"
   },
   "personaSections": {
     "behaviorsHabits": "Comportamientos y Hábitos",
@@ -541,6 +545,12 @@
     "newDocTitlePlaceholder": "p. ej., Conserje Virtual PRD",
     "outputDocType": "Tipo de Documento de Salida",
     "personaCount": "Número de Personas: {{count}}",
+    "personasKept_one": "Se conservará {{count}} persona protegida.",
+    "personasKept_other": "Se conservarán {{count}} personas protegidas.",
+    "personasReplacedAll_one": "Esto reemplaza la persona existente. Protégela antes si quieres conservarla.",
+    "personasReplacedAll_other": "Esto reemplaza las {{count}} personas existentes. Protege antes las que quieras conservar.",
+    "personasReplaced_one": "Se reemplazará {{count}} persona no protegida.",
+    "personasReplaced_other": "Se reemplazarán {{count}} personas no protegidas.",
     "prd": "PRD",
     "prdDesc": "Documento de Requisitos del Producto",
     "prdLabel": "PRD",
