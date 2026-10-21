@@ -146,7 +146,9 @@ export default function PersonaFeedbackPreview({ projectId, contextConfig }: Per
           {t('dataSourceWizard.personaPreview.counting')}
         </p>
       ) : null}
-      {shown ? <StatusLine preview={shown.preview} stale={shown.stale} confirming={!exact.isError} /> : null}
+      {/* `isFetching`, not `!isError`: an exact answer that came back unreadable is
+          also finished, and must not leave the estimate "confirming" forever. */}
+      {shown ? <StatusLine preview={shown.preview} stale={shown.stale} confirming={exact.isFetching} /> : null}
     </div>
   )
 }

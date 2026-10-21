@@ -174,6 +174,16 @@ describe('PersonaFeedbackPreview estimate-then-exact', () => {
     expect(screen.queryByText(/persona generation will fail/)).not.toBeInTheDocument()
   })
 
+  it('stops confirming when the exact count comes back unreadable', async () => {
+    answerByMode(() => Promise.resolve({ ...EXACT, matched: null }))
+    renderPreview()
+
+    expect(await screen.findByText('About 28,000 reviews match these filters')).toBeInTheDocument()
+    await vi.waitFor(() => {
+      expect(screen.queryByText('Confirming the exact count…')).not.toBeInTheDocument()
+    })
+  })
+
   it('keeps the estimate without the confirming note when the exact count fails', async () => {
     answerByMode(() => Promise.reject(new Error('API Error: 504')))
     renderPreview()
